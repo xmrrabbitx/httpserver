@@ -1,1 +1,1 @@
-#### my personal practice assemby projects usinf Fasm2 
+#### my personal practice assemby projects using Fasm2 

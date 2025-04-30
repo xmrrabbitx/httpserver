@@ -40,18 +40,21 @@ main:
 find_null:
  
 	cmp byte [rbx+rcx], 0                
-	;;je check_dots
-	je print_entry
+	je init_entry
 
 	inc rcx  
         jmp find_null 
 
-check_dots:
+check_singleDot:
 	cmp byte [rbx+1], '.'
 	je next_entry
 	jmp print_entry
+check_doubleDots:
+	cmp byte [rbx+2], '.'
+	je next_entry
+	jmp print_entry 
 
-print_entry:
+init_entry:
 
 	push rcx
 	mov [ascii_digit], cl   
@@ -60,11 +63,11 @@ print_entry:
 	push rsi
 	push rdx
 
-	mov rax, 1       
-    	mov rdi, 1         
-    	mov rsi, ascii_digit   
-    	mov rdx, 2        
-    	syscall 
+	;mov rax, 1       
+    	;mov rdi, 1         
+    	;mov rsi, ascii_digit   
+    	;mov rdx, 2        
+    	;syscall 
 	
 	pop rdi
 	pop rsi
@@ -72,11 +75,12 @@ print_entry:
 	pop rcx
 
 	cmp rcx, 2
-	je check_dots	
+	je check_singleDot	
+	
 	cmp rcx, 3
-	je check_dots	
+	je check_doubleDots
 
-
+print_entry:
 	mov rax,1
 	mov rdi,1
 	mov rsi,rbx

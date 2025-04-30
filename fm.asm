@@ -4,14 +4,14 @@ fd dq 0
 buffer rb 1024
 
 
-include "test.asm"
+include "helper.asm"
 
 
 segment readable executable
 entry main
 main:
 
-	call print_example
+	call get_currentDir
 		
 	mov rax, 79
 	mov rdi, currentDir
@@ -39,13 +39,44 @@ main:
 
 find_null:
  
-	cmp byte [rbx+rcx], 0                    
-        je print_entry                       
-        inc rcx  
+	cmp byte [rbx+rcx], 0                
+	;;je check_dots
+	je print_entry
+
+	inc rcx  
         jmp find_null 
 
+check_dots:
+	cmp byte [rbx+1], '.'
+	je next_entry
+	jmp print_entry
+
 print_entry:
-		
+
+	push rcx
+	mov [ascii_digit], cl   
+	add byte [ascii_digit], '0' 
+    	push rdi
+	push rsi
+	push rdx
+
+	mov rax, 1       
+    	mov rdi, 1         
+    	mov rsi, ascii_digit   
+    	mov rdx, 2        
+    	syscall 
+	
+	pop rdi
+	pop rsi
+	pop rdx
+	pop rcx
+
+	cmp rcx, 2
+	je check_dots	
+	cmp rcx, 3
+	je check_dots	
+
+
 	mov rax,1
 	mov rdi,1
 	mov rsi,rbx
@@ -57,7 +88,7 @@ print_entry:
 	mov rsi,del
 	mov rdx,1
 	syscall
-	
+
 next_entry:
 
 	movzx rax, word [rbx - 2]
@@ -70,15 +101,18 @@ next_entry:
 	
 	jmp find_null
 	
-
 exit:	
 
 	mov rax,60
 	xor rdi, rdi
 	syscall
 
+
+
+
 segment readable writeable
 ;;pathDir db "listdir",0	
 del db 0xa, 0
 mssg db "exited!",0
-currentDir rb 256
+dotMsg db "dots detected!",0
+ascii_digit db 0, 0xA

@@ -3,21 +3,14 @@ format ELF64 executable
 fd dq 0
 buffer rb 1024
 
-
 include "helper.asm"
-
 
 segment readable executable
 entry main
 main:
 
 	call get_currentDir
-		
-	mov rax, 79
-	mov rdi, currentDir
-	mov rsi, 256
-	syscall
-
+	
 	mov rax, 2
 	mov rdi, currentDir
 	;mov rsi, 0

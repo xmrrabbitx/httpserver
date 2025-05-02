@@ -3,18 +3,20 @@ format ELF64 executable
 fd dq 0
 buffer rb 1024
 
+;;include necessary file
 include "helper.asm"
+include "cat/cat.asm"
 
 segment readable executable
 entry main
 main:
-
 	call get_currentDir
-	
+	;;call cat
+
 	mov rax, 2
 	mov rdi, currentDir
-	;mov rsi, 0
-	;mov rdx, 0
+	mov rsi, 0
+	mov rdx, 0
 	syscall
 	mov [fd], rax
 
@@ -74,10 +76,10 @@ init_entry:
 	je check_doubleDots
 
 print_entry:
-	mov rax,1
-	mov rdi,1
-	mov rsi,rbx
-	mov rdx,rcx
+	mov rax, 1
+	mov rdi, 1
+	mov rsi, rbx
+	mov rdx, rcx
 	syscall
 
 	mov rax,1
@@ -104,12 +106,9 @@ exit:
 	xor rdi, rdi
 	syscall
 
-
-
-
 segment readable writeable
 ;;pathDir db "listdir",0	
 del db 0xa, 0
-mssg db "exited!",0
+;;mssg db "exited!",0
 dotMsg db "dots detected!",0
 ascii_digit db 0, 0xA

@@ -3,7 +3,8 @@ SYS_GETCWD = 79 ;; read current directory
 
 ;; length of current directory
 macro currDir len
-
+	
+	push rax
 	push rdi
 	push rsi
 
@@ -13,6 +14,7 @@ macro currDir len
 	syscall
 
 	pop rdi
+	pop rax
 	pop rsi
 	ret
 
@@ -23,5 +25,5 @@ get_currentDir:
 
 	currDir 256
 
-segment readable writeable
-	currentDir rb 256
+;;segment readable writeable
+currentDir rb 256

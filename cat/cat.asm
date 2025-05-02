@@ -49,6 +49,16 @@ macro close fdcat
 
 end macro
 
+macro newline
+
+	mov rax, SYS_WRITE
+	mov rdi, 1
+	mov rsi, del
+	mov rdx, 1
+	syscall
+
+end macro
+
 segment readable executable
 entry cat
 cat:
@@ -56,11 +66,15 @@ cat:
 	open filenameCat
 	read fdCat, bufferCat
 	write bufferCat, bytesReadCat
+	newline
 	close fdCat
-exit:	
+exit:
+
+	
 	mov rax,60
 	xor rdi, rdi
 	syscall
 
 segment readable writeable
 filenameCat db "1.txt", 0
+del db 0xa, 0

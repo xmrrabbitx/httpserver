@@ -1,3 +1,4 @@
+format ELF64 executable
 
 SYS_READ = 0
 SYS_WRITE = 1
@@ -48,11 +49,18 @@ macro close fdcat
 
 end macro
 
+segment readable executable
+entry cat
 cat:
+
 	open filenameCat
 	read fdCat, bufferCat
 	write bufferCat, bytesReadCat
 	close fdCat
-	ret
-;;segment readable writeable
+exit:	
+	mov rax,60
+	xor rdi, rdi
+	syscall
+
+segment readable writeable
 filenameCat db "1.txt", 0

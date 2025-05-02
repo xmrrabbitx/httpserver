@@ -4,8 +4,8 @@ fd dq 0
 buffer rb 1024
 
 ;;include necessary file
-include "helper.asm"
-include "cat/cat.asm"
+include "../helper/helper.asm"
+;;include "../cat/cat.asm"
 
 segment readable executable
 entry main

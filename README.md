@@ -1,1 +1,2 @@
-#### my personal practice assemby projects using Fasm2 
+#### assembly kit for linux
+#### tested on ubuntu 20

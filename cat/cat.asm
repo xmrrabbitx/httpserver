@@ -64,17 +64,34 @@ entry cat
 cat:
 
 	open filenameCat
+
+	;; error handling
+	cmp rax, -2
+	je printErr
+
 	read fdCat, bufferCat
 	write bufferCat, bytesReadCat
 	newline
 	close fdCat
 exit:
 
-	
 	mov rax,60
 	xor rdi, rdi
 	syscall
 
+printErr:
+
+	mov rax, SYS_WRITE
+	mov rdi, 1
+	mov rsi, errorMsg_filenotfound
+	mov rdx, 1024
+	syscall
+
+	newline
+
+	jmp exit	
+
 segment readable writeable
 filenameCat db "1.txt", 0
 del db 0xa, 0
+errorMsg_filenotfound db "No such file or directory!", 0

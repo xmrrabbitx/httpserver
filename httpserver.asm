@@ -6,7 +6,7 @@ type = 1
 protocol = 0 ;; default value is 0
 
 fd dq 0
-bufferHtml rb 1024
+bufferHtml rb 8192
 socketResponse rb 1024
 bytesReadHtml dq 0
 
@@ -105,7 +105,7 @@ found_space_method:
         mov rax, 0
         mov rdi, [fd] ;;read index file
         mov rsi, bufferHtml
-        mov rdx, 1024
+        mov rdx, 8192
         syscall
 
 	mov [bytesReadHtml], rax	

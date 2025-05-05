@@ -1,0 +1,93 @@
+/* Base Styles */
+body {
+	    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	        background-color: #f5f5f5;
+		    margin: 0;
+		        padding: 20px;
+		}
+
+		.container {
+			    max-width: 1000px;
+			        margin: 0 auto;
+				    background: white;
+				        padding: 20px;
+					    border-radius: 8px;
+					        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+					}
+
+					h1 {
+						    color: #333;
+						        text-align: center;
+							    margin-bottom: 30px;
+						    }
+
+						    /* Table Styles */
+						    table {
+							        width: 100%;
+								    border-collapse: collapse;
+								        margin-bottom: 20px;
+								}
+
+								th, td {
+									    padding: 12px 15px;
+									        text-align: left;
+										    border-bottom: 1px solid #ddd;
+									    }
+
+									    th {
+										        background-color: #4CAF50;
+											    color: white;
+										    }
+
+										    tr:nth-child(even) {
+											        background-color: #f9f9f9;
+											}
+
+											tr:hover {
+												    background-color: #f1f1f1;
+											    }
+
+											    /* Button Styles */
+											    .btn {
+												        border: none;
+													    padding: 8px 12px;
+													        border-radius: 4px;
+														    cursor: pointer;
+														        font-weight: 500;
+															    transition: all 0.3s ease;
+															        margin-right: 5px;
+															}
+
+															.btn:hover {
+																    opacity: 0.9;
+																        transform: translateY(-1px);
+																}
+
+																.btn:active {
+																	    transform: translateY(0);
+																    }
+
+																    .primary {
+																	        background-color: #4CAF50;
+																		    color: white;
+																	    }
+
+																	    .secondary {
+																		        background-color: #2196F3;
+																			    color: white;
+																		    }
+
+																		    .edit {
+																			        background-color: #FFC107;
+																				    color: black;
+																			    }
+
+																			    .delete {
+																				        background-color: #F44336;
+																					    color: white;
+																				    }
+
+																				    .action-buttons {
+																					        margin-top: 20px;
+																						    text-align: right;
+																					    }

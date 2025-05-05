@@ -7,19 +7,24 @@ protocol = 0 ;; default value is 0
 
 fd dq 0
 bufferHtml rb 1024
+socketResponse rb 1024
 bytesReadHtml dq 0
 
-segment readable executable
-
-entry main
-main:
-	;;creating socket
+;;creating socket
+macro socket Domain, Type, Protocol
 	;;rdi   rsi   rdx   r10	  r8   r9
 	mov rax, 41
-	mov rdi, domain
-	mov rsi, type
-	mov rdx, protocol
+	mov rdi, Domain
+	mov rsi, Type
+	mov rdx, Protocol
 	syscall
+end macro
+
+segment readable executable
+entry main
+main:
+
+	socket domain, type, protocol ;; socket macro
 
 	mov r12, rax ;;copy socket fd to r12
 	
@@ -36,8 +41,6 @@ main:
 	mov rsi, 10 ;;backlog 
 	syscall
 
-;accept_loop:
-
 	;;create accept
 	mov rax, 43
 	mov rdi, r12
@@ -47,12 +50,48 @@ main:
 
 	mov r13, rax ;;result of acceppt, client socket fd	
 	
-	;;read client socket request _ its curl request
+	;;read client socket request _ forexample curl request info
 	mov rax, 0
-	mov rdi, r13 ;;read client socket
-	mov rsi, bufferHtml
+	mov rdi, r13
+	mov rsi, socketResponse
 	mov rdx, 1024
 	syscall	
+
+	mov r14, rax ;; length of socket response
+
+	mov rsi, socketResponse
+
+find_space_method:
+
+	cmp byte [rsi], ' '
+	je found_space_method
+
+	inc rsi ;; mov to the nexy byte
+
+	cmp rsi, socketResponse+8
+	jmp find_space_method
+
+found_space_method:
+
+	mov rdx, rsi
+	sub rdx, socketResponse ;; seperate method name lenght from socket response 
+
+	;; test print method name eg: GET or POST
+	;; this method pints socketResponse in length of rdx
+	;; which is subtracted before	
+    	mov rax, 1
+    	mov rdi, 1
+    	mov rsi, socketResponse
+	syscall
+
+	;; test print socketResponse	
+    	;mov rax, 1
+    	;mov rdi, 1
+    	;mov rsi, socketResponse
+    	;;mov rdx, r14
+	;syscall
+	
+	;;jmp exit
 
 	;;open file index.html
 	mov rax, 2
@@ -99,8 +138,6 @@ main:
 	mov rax, 3
 	mov rdi, r14
 	syscall
-
-	;jmp accept_loop	
 	
 exit:	
 	mov rax, 60

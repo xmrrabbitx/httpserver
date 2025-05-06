@@ -1,5 +1,9 @@
 format ELF64 executable
 
+SYS_SOCKET = 41
+SYS_BIND = 49
+SYS_LISTEN  = 50
+
 af_inet = 2
 domain = af_inet ;;af_inet = 2
 type = 1 
@@ -13,43 +17,53 @@ bytesReadHtml dq 0
 ;;creating socket
 macro socket Domain, Type, Protocol
 	;;rdi   rsi   rdx   r10	  r8   r9
-	mov rax, 41
+	mov rax, SYS_SOCKET
 	mov rdi, Domain
 	mov rsi, Type
 	mov rdx, Protocol
 	syscall
 end macro
 
+;; create bind
+macro bind R12, Address
+	mov rax, SYS_BIND
+	mov rdi, R12 ;;socket fd
+	mov rsi, Address 
+	mov rdx, 16
+	syscall
+end macro
+
+;; create listen
+macro listen R12
+	mov rax, SYS_LISTEN
+	mov rdi, R12 ;;assign socket
+	mov rsi, 10 ;;backlog 
+	syscall
+end macro
+
+;; create accept
+macro accept R12
+	mov rax, 43
+	mov rdi, R12
+	mov rsi, 0
+	mov rdx, 0
+	syscall
+end macro
+
 segment readable executable
 entry main
 main:
-
 	socket domain, type, protocol ;; socket macro
 
 	mov r12, rax ;;copy socket fd to r12
 	
-	;;create bind
-	mov rax, 49
-	mov rdi, r12 ;;socket fd
-	mov rsi, address 
-	mov rdx, 16
-	syscall
+	bind r12, address ;; bind macro
 
-	;;create listen
-	mov rax, 50
-	mov rdi, r12 ;;assign socket
-	mov rsi, 10 ;;backlog 
-	syscall
+	listen r12 ;; listen macro
 
-	;;create accept
-	mov rax, 43
-	mov rdi, r12
-	mov rsi, 0
-	mov rdx, 0
-	syscall
+	accept r12 ;; accept macro
 
 	mov r13, rax ;;result of acceppt, client socket fd	
-	
 	;;read client socket request _ forexample curl request info
 	mov rax, 0
 	mov rdi, r13
@@ -59,30 +73,30 @@ main:
 
 	mov r14, rax ;; length of socket response
 
-	mov rsi, socketResponse
+	;;mov rsi, socketResponse
 
-find_space_method:
+;;find_space_method:
 
-	cmp byte [rsi], ' '
-	je found_space_method
+	;;cmp byte [rsi], ' '
+	;;je found_space_method
 
-	inc rsi ;; mov to the nexy byte
+	;;inc rsi ;; mov to the nexy byte
 
-	cmp rsi, socketResponse+8
-	jmp find_space_method
+	;;cmp rsi, socketResponse+8
+	;;jmp find_space_method
 
-found_space_method:
+;;found_space_method:
 
-	mov rdx, rsi
-	sub rdx, socketResponse ;; seperate method name lenght from socket response 
+	;;mov rdx, rsi
+	;;sub rdx, socketResponse ;; seperate method name lenght from socket response 
 
 	;; test print method name eg: GET or POST
 	;; this method pints socketResponse in length of rdx
 	;; which is subtracted before	
-    	mov rax, 1
-    	mov rdi, 1
-    	mov rsi, socketResponse
-	syscall
+    	;;mov rax, 1
+    	;;mov rdi, 1
+    	;;mov rsi, socketResponse
+	;;syscall
 
 	;; test print socketResponse	
     	;mov rax, 1
@@ -135,9 +149,9 @@ found_space_method:
 	syscall	
 
 	;;close
-	mov rax, 3
-	mov rdi, r14
-	syscall
+	;;mov rax, 3
+	;;mov rdi, r14
+	;;syscall
 	
 exit:	
 	mov rax, 60

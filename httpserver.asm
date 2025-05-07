@@ -90,29 +90,29 @@ main:
 	mov r14, rax ;; length of socket response
 
 	mov rsi, socketResponse
-	jmp find_space_method
+	jmp get_space_method
 
-find_space_method:
+get_space_method:
 
 	cmp byte [rsi], ' '
-	je found_space_method
+	je get_method
 
 	inc rsi ;; mov to the nexy byte
 
 	;;cmp rsi, socketResponse+8
-	jmp find_space_method
+	jmp get_space_method
 
-found_space_method:
+get_method:
 	mov rdx, rsi
 	sub rdx, socketResponse ;; seperate method name lenght from socket response 
 
 	;; test print method name eg: GET or POST
 	;; this method pints socketResponse in length of rdx
 	;; which is subtracted before	
-    	mov rax, 1
-    	mov rdi, 1
-    	mov rsi, socketResponse
-	syscall
+    	;;mov rax, 1
+    	;;mov rdi, 1
+    	;;mov rsi, socketResponse
+	;;syscall
 
 	;; test print socketResponse	
     	;mov rax, 1
@@ -128,37 +128,28 @@ found_space_method:
 	;;jmp exit
 	;;jmp handle_requests
 	;;jmp find_url
-	jmp find_space_url
+	jmp get_space_url
 	
-find_space_url:
+get_space_url:
 
-	cmp byte [rsi+rcx], ' '
-	je found_space_url
+	cmp byte [ rsi + rcx ], ' '
+	je get_url
 
 	inc rcx ;; mov to the nexy byte
 
 	;;cmp rsi, socketResponse+8
-	jmp find_space_url
+	jmp get_space_url
 
-found_space_url:
-	
+get_url:
+	add rsi, rcx
+	mov rdx, rcx	
     	mov rax, 1
     	mov rdi, 1
-	mov rdx, rcx
+	mov rsi, rsi
 	syscall
 
-
-	;; test print socketResponse	
-    	;mov rax, 1
-    	;mov rdi, 1
-    	;mov rsi, socketResponse
-    	;mov rdx, r14
-	;syscall
-	
-	;;jmp exit
-	;;jmp handle_requests
-	;;jmp find_url
 	jmp handle_requests
+
 handle_requests:
 	;;open file index.html
 	mov rax, 2

@@ -99,11 +99,10 @@ find_space_method:
 
 	inc rsi ;; mov to the nexy byte
 
-	cmp rsi, socketResponse+8
+	;;cmp rsi, socketResponse+8
 	jmp find_space_method
 
 found_space_method:
-
 	mov rdx, rsi
 	sub rdx, socketResponse ;; seperate method name lenght from socket response 
 
@@ -116,15 +115,52 @@ found_space_method:
 	syscall
 
 	;; test print socketResponse	
+    	;mov rax, 1
+    	;mov rdi, 1
+    	;mov rsi, socketResponse
+    	;mov rdx, r14
+	;syscall
+	
+	add rsi, rcx
+	inc rsi	
+
+	xor rcx, rcx
+	;;jmp exit
+	;;jmp handle_requests
+	;;jmp find_url
+	jmp find_space_url
+	
+find_space_url:
+
+	cmp byte [rsi+rcx], ' '
+	je found_space_url
+
+	inc rcx ;; mov to the nexy byte
+
+	;;cmp rsi, socketResponse+8
+	jmp find_space_url
+
+found_space_url:
+	;;mov rdi, rsi
+	mov rdx, rcx
+
     	mov rax, 1
     	mov rdi, 1
     	mov rsi, socketResponse
-    	mov rdx, r14
 	syscall
+
+	;; test print socketResponse	
+    	;mov rax, 1
+    	;mov rdi, 1
+    	;mov rsi, socketResponse
+    	;mov rdx, r14
+	;syscall
 	
 	;;jmp exit
-	jmp print
-print:
+	;;jmp handle_requests
+	;;jmp find_url
+	jmp handle_requests
+handle_requests:
 	;;open file index.html
 	mov rax, 2
 	mov rdi, path

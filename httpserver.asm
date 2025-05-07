@@ -3,6 +3,7 @@ format ELF64 executable
 SYS_SOCKET = 41
 SYS_BIND = 49
 SYS_LISTEN  = 50
+SYS_SETSOCKOPT = 54
 
 af_inet = 2
 domain = af_inet ;;af_inet = 2
@@ -13,6 +14,8 @@ fd dq 0
 bufferHtml rb 8192
 socketResponse rb 1024
 bytesReadHtml dq 0
+
+optval dd 1  ; int 1 for SO_REUSEADDR
 
 ;;creating socket
 macro socket Domain, Type, Protocol
@@ -50,12 +53,25 @@ macro accept R12
 	syscall
 end macro
 
+;; reuse address after close
+macro sockopt R12, Optval
+	mov rax, SYS_SETSOCKOPT    ; SYS_SETSOCKOPT
+	mov rdi, R12               ; socket fd
+	mov rsi, 1                 ; SOL_SOCKET
+	mov rdx, 2                 ; SO_REUSEADDR
+	mov r10, Optval            ; pointer to int 1
+	mov r8, 4                  ; length of int
+	syscall
+end macro
+
 segment readable executable
 entry main
 main:
 	socket domain, type, protocol ;; socket macro
 
 	mov r12, rax ;;copy socket fd to r12
+
+	sockopt r12, optval ;; reuse address after close
 	
 	bind r12, address ;; bind macro
 
@@ -143,16 +159,17 @@ main:
 	mov rdx, [bytesReadHtml]
 	syscall
 
-	;;close 
+	;;close socket 
 	mov rax, 3
 	mov rdi, r13
 	syscall	
 
-	;;close
-	;;mov rax, 3
-	;;mov rdi, r14
-	;;syscall
-	
+	;; close setsockopt
+	mov rax, 3
+	mov rdi, r12
+	syscall
+
+	jmp main	
 exit:	
 	mov rax, 60
 	mov rdx, rdx

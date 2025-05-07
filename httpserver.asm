@@ -121,7 +121,7 @@ found_space_method:
     	;mov rdx, r14
 	;syscall
 	
-	add rsi, rcx
+	;;add rsi, rcx
 	inc rsi	
 
 	xor rcx, rcx
@@ -141,13 +141,12 @@ find_space_url:
 	jmp find_space_url
 
 found_space_url:
-	;;mov rdi, rsi
-	mov rdx, rcx
-
+	
     	mov rax, 1
     	mov rdi, 1
-    	mov rsi, socketResponse
+	mov rdx, rcx
 	syscall
+
 
 	;; test print socketResponse	
     	;mov rax, 1

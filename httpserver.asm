@@ -58,7 +58,7 @@ macro sockopt R12, Optval
 	mov rax, SYS_SETSOCKOPT    ; SYS_SETSOCKOPT
 	mov rdi, R12               ; socket fd
 	mov rsi, 1                 ; SOL_SOCKET
-	mov rdx, 2                 ; SO_REUSEADDR
+	mov rdx, 2                 ; SO_REUSEADDR _ 2 means use address again
 	mov r10, Optval            ; pointer to int 1
 	mov r8, 4                  ; length of int
 	syscall
@@ -89,40 +89,42 @@ main:
 
 	mov r14, rax ;; length of socket response
 
-	;;mov rsi, socketResponse
+	mov rsi, socketResponse
+	jmp find_space_method
 
-;;find_space_method:
+find_space_method:
 
-	;;cmp byte [rsi], ' '
-	;;je found_space_method
+	cmp byte [rsi], ' '
+	je found_space_method
 
-	;;inc rsi ;; mov to the nexy byte
+	inc rsi ;; mov to the nexy byte
 
-	;;cmp rsi, socketResponse+8
-	;;jmp find_space_method
+	cmp rsi, socketResponse+8
+	jmp find_space_method
 
-;;found_space_method:
+found_space_method:
 
-	;;mov rdx, rsi
-	;;sub rdx, socketResponse ;; seperate method name lenght from socket response 
+	mov rdx, rsi
+	sub rdx, socketResponse ;; seperate method name lenght from socket response 
 
 	;; test print method name eg: GET or POST
 	;; this method pints socketResponse in length of rdx
 	;; which is subtracted before	
-    	;;mov rax, 1
-    	;;mov rdi, 1
-    	;;mov rsi, socketResponse
-	;;syscall
+    	mov rax, 1
+    	mov rdi, 1
+    	mov rsi, socketResponse
+	syscall
 
 	;; test print socketResponse	
-    	;mov rax, 1
-    	;mov rdi, 1
-    	;mov rsi, socketResponse
-    	;;mov rdx, r14
-	;syscall
+    	mov rax, 1
+    	mov rdi, 1
+    	mov rsi, socketResponse
+    	mov rdx, r14
+	syscall
 	
 	;;jmp exit
-
+	jmp print
+print:
 	;;open file index.html
 	mov rax, 2
 	mov rdi, path

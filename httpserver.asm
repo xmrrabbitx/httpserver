@@ -141,19 +141,26 @@ get_space_url:
 	jmp get_space_url
 
 get_url:
-	add rsi, rcx
 	mov rdx, rcx	
     	mov rax, 1
     	mov rdi, 1
 	mov rsi, rsi
 	syscall
 
+	cmp byte [rsi+1], " " ;; check if url is just /
+	je index_html
+		
+	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
+	inc rsi ;; move to next 1 byte to pass / of start url 
 	jmp handle_requests
 
+index_html:
+	mov rsi, path
+	jmp handle_requests
 handle_requests:
 	;;open file index.html
 	mov rax, 2
-	mov rdi, path
+	mov rdi, rsi
 	mov rsi, 0
 	syscall
 
@@ -167,7 +174,6 @@ handle_requests:
         syscall
 
 	mov [bytesReadHtml], rax	
-
 	;; close file
     	mov rax, 3
     	mov rdi, [fd]
@@ -214,8 +220,9 @@ dq 0
 path:
 db 'index.html',0
 
-http_header db 'HTTP/1.1 200 OK',13,10
-             db 'Content-Type: text/html',13,10
+http_header  db 'HTTP/1.1 200 OK',13,10
+             ;;db 'Content-Type: text/html',13,10 ;; it should set type for each file seperatly
              db 'Connection: close',13,10,13,10
 http_header_len = $ - http_header
 
+del db 0xa, 0

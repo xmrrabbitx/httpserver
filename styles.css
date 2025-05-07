@@ -1,79 +1,39 @@
-/* Reset and Base Styles */
+/* Base Reset */
 * {
-	*     margin: 0;
-	*         padding: 0;
-	*             box-sizing: border-box;
-	*             }
-	*
-	*             body {
-		*                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-		*                     line-height: 1.6;
-		*                         background-color: #f5f5f5;
-		*                             color: #333;
-		*                                 padding: 20px;
-		*                                 }
-		*
-		*/* Container for content */
-		.container {
-			    max-width: 800px;
-			        margin: 0 auto;
-				    background: white;
-				        padding: 30px;
-					    border-radius: 8px;
-					        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-					}
-
-					/* Headings */
-					h1 {
-						    color: #2c3e50;
-						        margin-bottom: 20px;
-							    padding-bottom: 10px;
-							        border-bottom: 2px solid #eee;
-							}
-
-							h2 {
-								    color: #3498db;
-								        margin: 15px 0;
-								}
-
-								/* Paragraphs and text */
-								p {
-									    margin-bottom: 15px;
-								    }
-
-								    /* Links */
-								    a {
-									        color: #3498db;
-										    text-decoration: none;
-										        transition: color 0.3s;
-										}
-
-										a:hover {
-											    color: #2980b9;
-										    }
-
-										    /* Lists */
-										    ul, ol {
-											        margin-left: 20px;
-												    margin-bottom: 20px;
-											    }
-
-											    /* Code blocks */
-											    code {
-												        font-family: 'Courier New', monospace;
-													    background: #f8f9fa;
-													        padding: 2px 5px;
-														    border-radius: 3px;
-														        font-size: 0.9em;
-														}
-
-														/* Responsive design */
-														@media (max-width: 600px) {
-															    .container {
-																            padding: 15px;
-																	        }
-																		    
-																		    h1 {
-																			            font-size: 1.5em;
-																				        }
-																				}
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    height: 100vh;
+    background-color: #0d0d0d;
+    color: #00ffcc;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .terminal {
+    background: #1a1a1a;
+    padding: 40px 60px;
+    border-radius: 12px;
+    box-shadow: 0 0 20px #00ffcc80;
+    text-align: left;
+    max-width: 600px;
+    width: 100%;
+    border: 2px solid #00ffcc60;
+  }
+  
+  .prompt {
+    font-size: 24px;
+    line-height: 1.4;
+    display: block;
+    color: #00ffcc;
+  }
+  
+  .text {
+    color: #ffffff;
+    text-shadow: 0 0 8px #00ff
+  }  

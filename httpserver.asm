@@ -8,7 +8,7 @@ SYS_LISTEN  = 50
 SYS_SETSOCKOPT = 54
 SYS_ACCEPT = 43
 SYS_OPEN = 2 ;; open file
-SYC_EXEC = 59 ;; exec syscall
+SYS_EXEC = 59 ;; exec syscall
 
 af_inet = 2
 domain = af_inet ;;af_inet = 2
@@ -21,6 +21,7 @@ socketResponse rb 1024
 bytesReadHtml dq 0
 
 optval dd 1  ; int 1 for SO_REUSEADDR
+
 
 ;;creating socket
 macro socket Domain, Type, Protocol
@@ -82,6 +83,7 @@ macro exec execPath, execArgs
 	mov rax, SYS_EXEC
 	mov rdi, execPath
 	mov rsi, execArgs
+	mov rdx, 0 ;;execArgsCount
 	syscall
 
 end macro
@@ -187,18 +189,26 @@ index_file_load:
 	open rsi ;; open file
 	;;cmp rax, 0 ;; check if file existed
 	test rax, rax ;; check if rax < 0, rax < 0 means error
-	jge handle_requests ;; jump if not negative or < 0
-		
+	;;jge handle_requests ;; jump if not negative or < 0
+	jge php_exec	
+	
 	mov rsi, indexHtmlPath ;; load index.html file
 
 	;; load html
 	open rsi ;; open file
 	cmp rax, -1 ;; check if file existed
 	jmp handle_requests
- 
+
+php_exec:
+	mov rdi, execPath
+	mov rsi, execArgs
+	;;mov rdx, execArgsCount
+	mov rdx, 0
+	exec execPath, execArgs
+	;;jmp exit
+	jmp handle_requests
 handle_requests:
 
-	;;open rsi ;; open file
 	mov [fd], rax
 	
   	;;read index.html file
@@ -263,4 +273,10 @@ http_header_len = $ - http_header
 del db 0xa, 0
 
 execPath db "/usr/bin/php", 0
+
+execArgs:
+	dq execPath
+	dq indexPhpPath
+	dq 0
+execArgsCount dd 2
 

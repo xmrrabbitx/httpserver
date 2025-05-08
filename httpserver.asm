@@ -189,7 +189,7 @@ index_file_load:
 	;;cmp rax, 0 ;; check if file existed
 	test rax, rax ;; check if rax < 0, rax < 0 means error
 	;;jge handle_requests ;; jump if not negative or < 0
-	jge php_exec	
+	jge php_fork	
 	
 	mov rsi, indexHtmlPath ;; load index.html file
 
@@ -197,7 +197,8 @@ index_file_load:
 	open rsi ;; open file
 	cmp rax, -1 ;; check if file existed
 	;;jmp handle_requests
-	jmp php_fork
+	mov [fd], rax
+	jmp handle_requests
 php_fork:
 	mov rax, 57 ;; sys call fork
 	syscall
@@ -205,17 +206,16 @@ php_fork:
 	test rax, rax
 	jz php_exec
 	jg handle_requests
-	jmp exit
 php_exec:
 	mov rdi, execPath
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
 	
-	jmp handle_requests
+	jmp exit
 handle_requests:
 
-	mov [fd], rax
+	;;mov [fd], rax
 	
   	;;read index.html file
         mov rax, 0

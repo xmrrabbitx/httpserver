@@ -1,9 +1,14 @@
 format ELF64 executable
 
+;; necessary files
+
 SYS_SOCKET = 41
 SYS_BIND = 49
 SYS_LISTEN  = 50
 SYS_SETSOCKOPT = 54
+SYS_ACCEPT = 43
+SYS_OPEN = 2 ;; open file
+SYC_EXEC = 59 ;; exec syscall
 
 af_inet = 2
 domain = af_inet ;;af_inet = 2
@@ -46,7 +51,7 @@ end macro
 
 ;; create accept
 macro accept R12
-	mov rax, 43
+	mov rax, SYS_ACCEPT
 	mov rdi, R12
 	mov rsi, 0
 	mov rdx, 0
@@ -62,6 +67,23 @@ macro sockopt R12, Optval
 	mov r10, Optval            ; pointer to int 1
 	mov r8, 4                  ; length of int
 	syscall
+end macro
+
+macro open Rsi
+	;;open file index.html
+	mov rax, SYS_OPEN
+	mov rdi, Rsi
+	mov rsi, 0
+	syscall
+end macro
+
+macro exec execPath, execArgs
+	
+	mov rax, SYS_EXEC
+	mov rdi, execPath
+	mov rsi, execArgs
+	syscall
+
 end macro
 
 segment readable executable
@@ -148,22 +170,35 @@ get_url:
 	syscall
 
 	cmp byte [rsi+1], " " ;; check if url is just /
-	je index_html
+	je index_file_load ;; load index file 
 		
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
 	inc rsi ;; move to next 1 byte to pass / of start url 
+	
+	open rsi ;; open file
 	jmp handle_requests
 
-index_html:
-	mov rsi, path
+;; load index.php / index.html
+index_file_load:	
+	
+	;; load php
+	mov rsi, indexPhpPath ;; load index.php file
+
+	open rsi ;; open file
+	;;cmp rax, 0 ;; check if file existed
+	test rax, rax ;; check if rax < 0, rax < 0 means error
+	jge handle_requests ;; jump if not negative or < 0
+		
+	mov rsi, indexHtmlPath ;; load index.html file
+
+	;; load html
+	open rsi ;; open file
+	cmp rax, -1 ;; check if file existed
 	jmp handle_requests
+ 
 handle_requests:
-	;;open file index.html
-	mov rax, 2
-	mov rdi, rsi
-	mov rsi, 0
-	syscall
 
+	;;open rsi ;; open file
 	mov [fd], rax
 	
   	;;read index.html file
@@ -217,8 +252,8 @@ dw 0x901f
 dd 0
 dq 0
 
-path:
-db 'index.html',0
+indexHtmlPath db 'index.html',0
+indexPhpPath db 'index.php',0
 
 http_header  db 'HTTP/1.1 200 OK',13,10
              ;;db 'Content-Type: text/html',13,10 ;; it should set type for each file seperatly
@@ -226,3 +261,6 @@ http_header  db 'HTTP/1.1 200 OK',13,10
 http_header_len = $ - http_header
 
 del db 0xa, 0
+
+execPath db "/usr/bin/php", 0
+

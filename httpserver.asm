@@ -85,7 +85,6 @@ macro exec execPath, execArgs
 	mov rsi, execArgs
 	mov rdx, 0 ;;execArgsCount
 	syscall
-
 end macro
 
 segment readable executable
@@ -197,15 +196,26 @@ index_file_load:
 	;; load html
 	open rsi ;; open file
 	cmp rax, -1 ;; check if file existed
-	jmp handle_requests
+	;;jmp handle_requests
+	jmp php_fork
+php_fork:
+	mov rax, 57 ;; sys call fork
+	syscall
 
+	test rax, rax
+	jz php_exec
+	js handle_requests
+	jmp handle_requests
 php_exec:
 	mov rdi, execPath
 	mov rsi, execArgs
-	;;mov rdx, execArgsCount
 	mov rdx, 0
 	exec execPath, execArgs
-	;;jmp exit
+	
+	mov rax, 60
+	xor rdi, rdi
+	syscall
+	
 	jmp handle_requests
 handle_requests:
 

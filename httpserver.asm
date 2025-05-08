@@ -204,17 +204,13 @@ php_fork:
 
 	test rax, rax
 	jz php_exec
-	js handle_requests
-	jmp handle_requests
+	jg handle_requests
+	jmp exit
 php_exec:
 	mov rdi, execPath
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
-	
-	mov rax, 60
-	xor rdi, rdi
-	syscall
 	
 	jmp handle_requests
 handle_requests:

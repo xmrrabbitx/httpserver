@@ -176,8 +176,8 @@ main:
 	mov r14, rax ;; length of socket response
 
 	mov rsi, socketResponse
-	jmp get_space_method
-
+	;;jmp get_space_method
+	jmp php_fpm
 get_space_method:
 
 	cmp byte [rsi], ' '
@@ -251,7 +251,7 @@ index_file_load:
 	open rsi ;; open file
 	test rax, rax ;; check if rax < 0, rax < 0 means error
 	;;jge php_fork ;; in case of php cli	
-	jge php_fpm    ;; incase of php fpm fastcgi
+	;;jge php_fpm    ;; incase of php fpm fastcgi
 
 	mov rsi, indexHtmlPath ;; load index.html file
 

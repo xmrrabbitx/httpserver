@@ -1,7 +1,5 @@
 format ELF64 executable
 
-;; necessary files
-
 SYS_SOCKET = 41
 SYS_BIND = 49
 SYS_LISTEN  = 50
@@ -238,7 +236,7 @@ php_exec:
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
-	jmp close
+
 php_result:
 	
     	;; write HTTP headers

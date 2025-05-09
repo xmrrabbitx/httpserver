@@ -205,7 +205,8 @@ php_fork:
 
 	test rax, rax
 	jz php_exec
-	jg close
+	jg close ;; close r12 and r13 in fork
+
 php_exec:
 
     	;; write HTTP headers
@@ -227,11 +228,17 @@ php_exec:
     	mov rax, 33            ;; syscall number for dup2
     	syscall
 
+	;; close setsockopt
+	;; r13 must never close on exec
+	mov rax, 3
+	mov rdi, r12
+	syscall
+
 	mov rdi, execPath
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
-	
+	jmp close
 php_result:
 	
     	;; write HTTP headers
@@ -279,9 +286,9 @@ close:
 	syscall	
 
 	;; close setsockopt
-	;;mov rax, 3
-	;;mov rdi, r12
-	;;syscall
+	mov rax, 3
+	mov rdi, r12
+	syscall
 
 	jmp main	
 exit:	

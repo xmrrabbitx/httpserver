@@ -1,4 +1,3 @@
 <?php
 
-print("php is here");
-print(10/2);
+print("php is here!");

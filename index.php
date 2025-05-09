@@ -1,5 +1,5 @@
 <?php
-
+print("served by http assembly!\n\n");
 $start_time = microtime(true);
 
 function fibonacci($n) {

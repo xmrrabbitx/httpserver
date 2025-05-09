@@ -176,8 +176,7 @@ main:
 	mov r14, rax ;; length of socket response
 
 	mov rsi, socketResponse
-	;;jmp get_space_method
-	jmp php_fpm
+	jmp get_space_method
 get_space_method:
 
 	cmp byte [rsi], ' '
@@ -234,8 +233,10 @@ get_url:
 	syscall
 
 	cmp byte [rsi+1], " " ;; check if url is just /
-	je index_file_load ;; load index file 
-		
+	;;je index_file_load ;; load index file 
+	je php_fpm	
+
+	
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
 	inc rsi ;; move to next 1 byte to pass / of start url 
 	
@@ -274,10 +275,11 @@ php_fpm:
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6
 	cmp al, 6 ;; check if successful
-	jne exit ;; error mesg
+	;;jne exit ;; error mesg
 
-	mov rdi, fcgi_response_buffer
-	add rdi, 8 ;; skip headers data like version, type
+	jmp read_data
+	;;mov rdi, fcgi_response_buffer
+	;;add rdi, 8 ;; skip headers data like version, type
 	mov rdi, [rdi] ;; store actual data 	
 
 	;; read the response	
@@ -288,11 +290,27 @@ php_fpm:
 	;;jz exit
 	
 	write 1, fcgiRespBuffer, rax 
-	jmp exit 
+	jmp exit
+
+read_data:
+    fcgiResponse r15, fcgi_response_buffer, 1024 ;; read the next chunk of data
+
+    cmp rax, 0 ;; check if we reached end of stream
+    je write_data ;; if no more data, move to writing
+
+    ;; Otherwise, increment counter and continue reading
+    add rbx, rax ;; increment byte counter by the number of bytes read
+    jmp read_data ;; continue reading
+write_data:
+    ;; Now we write the data
+    mov rdi, 1               ;; File descriptor 1 (stdout)
+    mov rsi, fcgi_response_buffer ;; Data to write
+    mov rdx, rbx             ;; Number of bytes to write (from the byte counter)
+    syscall  
 php_fork:
 	mov rax, 57 ;; sys call fork
 	syscall
-
+	
 	test rax, rax
 	jz php_exec
 	jg close ;; close r12 and r13 in fork

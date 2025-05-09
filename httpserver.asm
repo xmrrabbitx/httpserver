@@ -197,7 +197,7 @@ index_file_load:
 	open rsi ;; open file
 	cmp rax, -1 ;; check if file existed
 	;;jmp handle_requests
-	mov [fd], rax
+
 	jmp handle_requests
 php_fork:
 	mov rax, 57 ;; sys call fork
@@ -205,19 +205,51 @@ php_fork:
 
 	test rax, rax
 	jz php_exec
-	jg handle_requests
+	;;jg php_result
+	;;jg main
 php_exec:
+
+    	;; write HTTP headers
+    	mov rax, 1
+    	mov rdi, r13
+    	mov rsi, http_php_header
+    	mov rdx, http_php_header_len
+    	syscall
+
+	 ;; Redirect stdout (fd 1) to the socket (r13)
+    	mov rdi, r13           ;; rdi = socket (r13)
+    	mov rsi, 1             ;; rsi = stdout (fd 1)
+    	mov rax, 33            ;; syscall number for dup2
+    	syscall
+
+    ;; Redirect stderr (fd 2) to the socket (r13) as well (optional)
+    	mov rdi, r13           ;; rdi = socket (r13)
+    	mov rsi, 2             ;; rsi = stderr (fd 2)
+    	mov rax, 33            ;; syscall number for dup2
+    	syscall
+
 	mov rdi, execPath
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
 	
-	jmp exit
-handle_requests:
-
-	;;mov [fd], rax
+	test rax, rax
+	jz exit
 	
-  	;;read index.html file
+php_result:
+	
+    	;; write HTTP headers
+    	mov rax, 1
+    	mov rdi, r13
+    	mov rsi, http_php_header
+    	mov rdx, http_php_header_len
+    	syscall
+
+handle_requests:
+	
+	mov [fd], rax
+  	
+	;;read index.html file
         mov rax, 0
         mov rdi, [fd] ;;read index file
         mov rsi, bufferHtml
@@ -233,8 +265,8 @@ handle_requests:
     	;; write HTTP headers
     	mov rax, 1
     	mov rdi, r13
-    	mov rsi, http_header
-    	mov rdx, http_header_len
+    	mov rsi, http_html_header
+    	mov rdx, http_html_header_len
     	syscall
 
 	;;write r14 into r13
@@ -271,10 +303,14 @@ dq 0
 indexHtmlPath db 'index.html',0
 indexPhpPath db 'index.php',0
 
-http_header  db 'HTTP/1.1 200 OK',13,10
-             ;;db 'Content-Type: text/html',13,10 ;; it should set type for each file seperatly
+http_php_header  db 'HTTP/1.1 200 OK',13,10
+             db 'Content-Type: text/plain',13,10 ;; it should set type for each file seperatly
              db 'Connection: close',13,10,13,10
-http_header_len = $ - http_header
+http_php_header_len = $ - http_php_header
+
+http_html_header  db 'HTTP/1.1 200 OK',13,10
+             db 'Connection: close',13,10,13,10
+http_html_header_len = $ - http_html_header
 
 del db 0xa, 0
 

@@ -1,6 +1,10 @@
 format ELF64 executable
 
+
+SYS_WRITE = 1
+SYS_READ = 0
 SYS_SOCKET = 41
+SYS_CONNECT = 42
 SYS_BIND = 49
 SYS_LISTEN  = 50
 SYS_SETSOCKOPT = 54
@@ -9,15 +13,19 @@ SYS_OPEN = 2 ;; open file
 SYS_EXEC = 59 ;; exec syscall
 
 af_inet = 2
-domain = af_inet ;;af_inet = 2
+af_unix = 1
+domain = af_inet ;; af_inet = 2
 type = 1 
 protocol = 0 ;; default value is 0
+phpfpmDomain = af_unix ;; af_unix = 1 
+
 
 fd dq 0
 bufferHtml rb 8192
 socketResponse rb 1024
 bytesReadHtml dq 0
-
+fcgi_response_buffer rb 1024
+fcgiRespBuffer rb 1024
 optval dd 1  ; int 1 for SO_REUSEADDR
 
 
@@ -77,13 +85,70 @@ macro open Rsi
 end macro
 
 macro exec execPath, execArgs
-	
 	mov rax, SYS_EXEC
 	mov rdi, execPath
 	mov rsi, execArgs
 	mov rdx, 0 ;;execArgsCount
 	syscall
 end macro
+
+macro write Rdi, Rsi, Rdx
+	mov rax, SYS_WRITE
+	mov rdi, Rdi 
+        mov rsi, Rsi 
+        mov rdx, Rdx 
+        syscall
+end macro
+
+macro connect Rdi, Rsi, Rdx
+	mov rax, SYS_CONNECT
+	mov rdi, Rdi ;; r15
+	mov rsi, Rsi ;; sockaddr
+	mov rdx, Rdx ;; size sockaddr
+	syscall
+end macro
+
+macro fcgiBeginRequest fd, buffer, length
+
+	mov rax, SYS_WRITE
+	mov rdi, fd 
+	mov rsi, buffer
+	mov rdx, length
+	syscall
+
+end macro
+
+
+macro fcgiParamsRequest fd, buffer, length
+
+	mov rax, SYS_WRITE
+	mov rdi, fd 
+	mov rsi, buffer
+	mov rdx, length
+	syscall
+
+end macro
+
+macro fcgiStdinRequest fd, buffer, length
+
+	mov rax, SYS_WRITE
+	mov rdi, fd 
+	mov rsi, buffer
+	mov rdx, length
+	syscall
+
+end macro
+
+macro fcgiResponse fd, buffer, length
+
+	mov rax, SYS_READ
+	mov rdi, fd 
+	mov rsi, buffer
+	mov rdx, length
+	syscall
+
+end macro
+
 
 segment readable executable
 entry main
@@ -184,11 +249,10 @@ index_file_load:
 	mov rsi, indexPhpPath ;; load index.php file
 
 	open rsi ;; open file
-	;;cmp rax, 0 ;; check if file existed
 	test rax, rax ;; check if rax < 0, rax < 0 means error
-	;;jge handle_requests ;; jump if not negative or < 0
-	jge php_fork	
-	
+	;;jge php_fork ;; in case of php cli	
+	jge php_fpm    ;; incase of php fpm fastcgi
+
 	mov rsi, indexHtmlPath ;; load index.html file
 
 	;; load html
@@ -197,6 +261,34 @@ index_file_load:
 	;;jmp handle_requests
 
 	jmp handle_requests
+
+php_fpm:
+	socket phpfpmDomain, type, protocol ;; php fpm socket 
+	mov r15, rax
+	connect r15, sockaddr, 110 ;; connect to socked fd phpfpm
+	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
+	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
+	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length 
+	fcgiResponse r15, fcgi_response_buffer, 1024
+	
+	mov rdi, fcgi_response_buffer
+	mov al, [rdi+1] ;; response type is 6
+	cmp al, 6 ;; check if successful
+	jne exit ;; error mesg
+
+	mov rdi, fcgi_response_buffer
+	add rdi, 8 ;; skip headers data like version, type
+	mov rdi, [rdi] ;; store actual data 	
+
+	;; read the response	
+	fcgiResponse r15, fcgiRespBuffer, 1024
+	mov rdi, fcgiRespBuffer
+	mov rax, [rdi]	
+	test rax, rax
+	;;jz exit
+	
+	write 1, fcgiRespBuffer, rax 
+	jmp exit 
 php_fork:
 	mov rax, 57 ;; sys call fork
 	syscall
@@ -323,4 +415,60 @@ execArgs:
 	dq indexPhpPath
 	dq 0
 execArgsCount dd 2
+
+sockaddr:
+	db 1, 0 ;; af_unix = 1
+	db "/run/php/php7.0-fpm.sock", 0
+
+fcgi_begin:
+	db 1              ; version
+    	db 1              ; FCGI_BEGIN_REQUEST
+    	db 0              ; requestIdB1
+    	db 1              ; requestIdB0
+    	db 0              ; contentLengthB1
+    	db 8              ; contentLengthB0
+    	db 0              ; paddingLength
+    	db 0              ; reserved
+    	db 0              ; roleB1
+    	db 1              ; roleB0 (FCGI_RESPONDER)
+    	db 0              ; flags
+    	db 0, 0, 0, 0, 0  ; reserved[5]
+
+fcgi_begin_length = $ - fcgi_begin
+
+fcgi_params:
+	; Example: REQUEST_METHOD=GET
+    	db 13         ; Key length: 13 (REQUEST_METHOD)
+    	db "REQUEST_METHOD"  ; Key: "REQUEST_METHOD"
+    	db 3          ; Value length: 3 ("GET")
+    	db "GET"       ; Value: "GET"
+
+    	; Example: SCRIPT_FILENAME=/path/to/index.php
+    	db 9         ; Key length: 15 (SCRIPT_FILENAME)
+    	db "SCRIPT_FILENAME"
+    	db  9        ; Value length: 19 ("/path/to/index.php")
+    	db "index.php"
+
+ 	; Example: QUERY_STRING (if any)
+    	db 13         ; Key length: 13 (QUERY_STRING)
+    	db "QUERY_STRING"
+    	db 0          ; Value length: 0 (empty for GET without query string)
+    	db ""
+
+fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
+
+
+fcgi_stdin:
+    	db 1              ; version
+    	db 5              ; FCGI_STDIN
+    	db 0              ; requestIdB1
+    	db 1              ; requestIdB0
+    	db 0              ; contentLengthB1
+    	db 0              ; contentLengthB0
+    	db 0              ; paddingLength
+    	db 0              ; reserved
+fcgi_stdin_length = $ - fcgi_stdin
+
+
+ 
 

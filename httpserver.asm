@@ -205,8 +205,9 @@ php_fork:
 
 	test rax, rax
 	jz php_exec
-	;;jg php_result
+	jg close
 	;;jg main
+	jmp main
 php_exec:
 
     	;; write HTTP headers
@@ -232,9 +233,6 @@ php_exec:
 	mov rsi, execArgs
 	mov rdx, 0
 	exec execPath, execArgs
-	
-	test rax, rax
-	jz exit
 	
 php_result:
 	
@@ -275,7 +273,8 @@ handle_requests:
 	mov rsi, bufferHtml
 	mov rdx, [bytesReadHtml]
 	syscall
-
+	jmp close
+close:
 	;;close socket 
 	mov rax, 3
 	mov rdi, r13

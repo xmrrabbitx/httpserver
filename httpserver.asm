@@ -206,8 +206,6 @@ php_fork:
 	test rax, rax
 	jz php_exec
 	jg close
-	;;jg main
-	jmp main
 php_exec:
 
     	;; write HTTP headers
@@ -281,9 +279,9 @@ close:
 	syscall	
 
 	;; close setsockopt
-	mov rax, 3
-	mov rdi, r12
-	syscall
+	;;mov rax, 3
+	;;mov rdi, r12
+	;;syscall
 
 	jmp main	
 exit:	

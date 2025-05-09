@@ -233,8 +233,7 @@ get_url:
 	syscall
 
 	cmp byte [rsi+1], " " ;; check if url is just /
-	;;je index_file_load ;; load index file 
-	je php_fpm	
+	je index_file_load ;; load index file 
 
 	
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
@@ -252,7 +251,7 @@ index_file_load:
 	open rsi ;; open file
 	test rax, rax ;; check if rax < 0, rax < 0 means error
 	;;jge php_fork ;; in case of php cli	
-	;;jge php_fpm    ;; incase of php fpm fastcgi
+	jge php_fpm    ;; incase of php fpm fastcgi
 
 	mov rsi, indexHtmlPath ;; load index.html file
 

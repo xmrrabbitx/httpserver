@@ -120,12 +120,12 @@ macro fcgiHeaders sockfd, type, requestId, contentLength, paddingLength
 	mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
  	mov byte [bufferHeaders + 7], 0 ;; reserved
 	
-	write sockfd, bufferHeaders, 8
-	
 end macro
 
 macro fcgiBeginRequest fd, buffer, length
 
+	fcgiHeaders fd, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
+	
 	mov rax, SYS_WRITE
 	mov rdi, fd 
 	mov rsi, buffer
@@ -282,11 +282,10 @@ php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
 	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
-	
-	fcgiHeaders r15, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
-		
+
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
-	
+
+	jmp exit	
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
 
 	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length

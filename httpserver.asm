@@ -249,7 +249,6 @@ index_file_load:
 
 	open rsi ;; open file
 	test rax, rax ;; check if rax < 0, rax < 0 means error
-	;;jge php_fork ;; in case of php cli	
 	jge php_fpm    ;; incase of php fpm fastcgi
 
 	mov rsi, indexHtmlPath ;; load index.html file
@@ -369,6 +368,7 @@ dd 0
 dq 0
 
 indexHtmlPath db 'index.html',0
+indexPhpPath db 'index.php',0
 
 http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10
@@ -385,11 +385,57 @@ fcgi_begin:
 	db 0 ;; high byte roleB0
 	db 1 ;; low byte roleB1
 	db 0 ;; flags
-	db 5 dup(0)
+	db 5 dup(0) ;;
 fcgi_begin_length = $ - fcgi_begin
 	
 fcgi_params:
+
+	;; struct in C: name_len value_len name_byte value_byte	
+	db 15 ;; name length
+	db 22 ;;  value length
+	db 'SCRIPT_FILENAME' ;; name byte
+	db "/home/ahmad/index.php" ;; value byte
+	
+	db 14
+	db 3
+	db "REQUEST_METHOD"
+	db "GET"
+
+	db 14
+	db 0	
+	db "CONTENT_LENGTH"
+	db "0"
 		
+	db 15
+	db 8
+	db "SERVER_PROTOCOL"
+	db "HTTP/1.1"
+
+	db 17
+	db 7
+	db "GATEWAY_INTERFACE"
+	db "CGI/1.1"	
+	
+	db 11 
+	db 9
+	db "REMOTE_ADDR"
+	db "127.0.0.1"
+	
+	db 11
+	db 9
+	db "SERVER_NAME"
+	db "localhost"
+
+	db 11
+	db 2
+	db "SERVER_PORT"
+	db "80"
+
+	db 11
+	db 10
+	db "REQUEST_URI"
+	db "/index.php"
+
 fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
 
 

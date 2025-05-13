@@ -120,14 +120,15 @@ macro fcgiHeaders sockfd, type, requestId, contentLength, paddingLength
 	mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
  	mov byte [bufferHeaders + 7], 0 ;; reserved
 	
+	write sockfd, bufferHeaders, 8	
 end macro
 
 macro fcgiBeginRequest fd, buffer, length
 
 	fcgiHeaders fd, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
-	
+
 	mov rax, SYS_WRITE
-	mov rdi, fd 
+	mov rdi, rax;;fd
 	mov rsi, buffer
 	mov rdx, length
 	syscall
@@ -136,9 +137,11 @@ end macro
 
 
 macro fcgiParamsRequest fd, buffer, length
+	
+	fcgiHeaders fd, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
 
 	mov rax, SYS_WRITE
-	mov rdi, fd 
+	mov rdi, rax;;fd 
 	mov rsi, buffer
 	mov rdx, length
 	syscall
@@ -284,15 +287,14 @@ php_fpm:
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
-
-	jmp exit	
-	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
-
-	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length
 	
-	fcgiStdinRequest r15, 1 
+	fcgiParamsRequest rax, fcgi_params, fcgi_params_length
+	
+	fcgiEndParamsRequest rax, fcgi_endparams, fcgi_endparams_length
+	
+	fcgiStdinRequest rax, 1 
 	fcgiResponse r15, fcgi_response_buffer, 1024
-jmp exit
+	jmp exit
 	
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6

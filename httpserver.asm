@@ -299,7 +299,7 @@ php_fpm:
 	
 	fcgiHeaders r15, fcgi_headers_begin, fcgi_headersbegin_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
-
+	
 	fcgiHeaders r15, fcgi_headers_params, fcgi_headersparams_length
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
 		
@@ -449,7 +449,7 @@ fcgi_headers_params:
         db 0
         db 1
 	db 0
-	db 8
+	db 48
         db 0
         db 0
 fcgi_headersparams_length = $ - fcgi_headers_begin

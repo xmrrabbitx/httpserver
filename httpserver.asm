@@ -33,6 +33,8 @@ optval dd 1  ; int 1 for SO_REUSEADDR
 
 bufferHeaders rb 8
 
+bytesReadPhp dq 0
+
 ;;creating socket
 macro socket Domain, Type, Protocol
 	;;rdi   rsi   rdx   r10	  r8   r9
@@ -159,9 +161,13 @@ macro fcgiEndParamsRequest fd, buffer, length
 
 end macro
 
-macro fcgiStdinRequest fd, requestId
+macro fcgiStdinRequest fd, buffer, length
 	
-	
+	mov rax, SYS_WRITE
+        mov rdi, fd
+        mov rsi, buffer
+        mov rdx, length
+        syscall
 
 end macro
 
@@ -292,24 +298,38 @@ php_fpm:
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
 	fcgiHeaders r15, fcgi_headers, fcgi_headers_length
-	
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 
-	jmp exit	
-	fcgiParamsRequest rax, fcgi_params, fcgi_params_length
-	
-	fcgiEndParamsRequest rax, fcgi_endparams, fcgi_endparams_length
-	
-	fcgiStdinRequest rax, 1 
+	fcgiHeaders r15, fcgi_headers, fcgi_headers_length
+	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
+		
+	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length
+		
+	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length
 	fcgiResponse r15, fcgi_response_buffer, 1024
-	jmp exit
+	mov [bytesReadPhp], rax	
+
+    	mov rax, 1
+    	mov rdi, r13
+    	mov rsi, http_php_header
+    	mov rdx, http_php_header_len
+    	syscall
+
+	mov rax, 1
+	mov rdi, r13
+	mov rsi, [fcgi_response_buffer + 8] 
+	mov rdx, 1024
+	sub rdx, 8
+	syscall
+	jmp close
 	
+	jmp exit
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6
 	cmp al, 6 ;; check if successful
-	;;jne exit ;; error mesg
-
-	jmp read_data
+	jne exit ;; error mesg
+	
+	;;jmp read_data
 	;;mov rdi, fcgi_response_buffer
 	;;add rdi, 8 ;; skip headers data like version, type
 	;;mov rdi, [rdi] ;; store actual data 	
@@ -405,6 +425,14 @@ http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10
 http_html_header_len = $ - http_html_header
 
+
+http_php_header: 
+	    	db "HTTP/1.1 200 OK", 13, 10
+    		db "Content-Type: text/html", 13, 10
+    		db "Connection: close", 13, 10, 13, 10
+http_php_header_len = $ - http_html_header
+
+
 del db 0xa, 0
 
 sockaddr:
@@ -420,12 +448,14 @@ fcgi_begin:
 fcgi_begin_length = $ - fcgi_begin
 
 fcgi_headers:
-	db 1
-	db 1
-	db 2
-	db 2
-	db 1
+	db 1 ;; version = 1
+	db 1 ;; type
+	db 0 
+	db 1 
 	db 0
+	db 8
+	db 0
+	db 0 
 fcgi_headers_length = $ - fcgi_headers
 	
 fcgi_params:
@@ -483,7 +513,13 @@ fcgi_endparams:
 
 fcgi_endparams_length = $ - fcgi_endparams
 	
-fcgi_stdin:	
-	
-
+fcgi_stdin:
+	db 1 ;; version = 1 
+	db 5 ;; type
+	db 0 ;; requestIdB1 high byte
+	db 1 ;; requestIdB0 low byte
+	db 0 ;; contentLengthB1
+	db 0 ;; contentLengthB0
+	db 0 ;; paddingLength
+	db 0 ;; reserved_stdin		
 fcgi_stdin_length = $ - fcgi_stdin

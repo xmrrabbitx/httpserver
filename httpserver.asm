@@ -235,7 +235,6 @@ get_url:
 	cmp byte [rsi+1], " " ;; check if url is just /
 	je index_file_load ;; load index file 
 
-	
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
 	inc rsi ;; move to next 1 byte to pass / of start url 
 	
@@ -265,9 +264,13 @@ index_file_load:
 php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
 	mov r15, rax
-	connect r15, sockaddr, 110 ;; connect to socked fd phpfpm
+	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
+	
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
+
+	jmp exit	
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
+	fcgiParamsRequest r15, fcgi_params_end, fcgi_params_end_length
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length 
 	fcgiResponse r15, fcgi_response_buffer, 1024
 	
@@ -279,81 +282,35 @@ php_fpm:
 	jmp read_data
 	;;mov rdi, fcgi_response_buffer
 	;;add rdi, 8 ;; skip headers data like version, type
-	mov rdi, [rdi] ;; store actual data 	
+	;;mov rdi, [rdi] ;; store actual data 	
 
 	;; read the response	
-	fcgiResponse r15, fcgiRespBuffer, 1024
-	mov rdi, fcgiRespBuffer
-	mov rax, [rdi]	
-	test rax, rax
+	;;fcgiResponse r15, fcgiRespBuffer, 1024
+	;;mov rdi, fcgiRespBuffer
+	;;mov rax, [rdi]	
+	;;test rax, rax
 	;;jz exit
 	
-	write 1, fcgiRespBuffer, rax 
-	jmp exit
+	;;write 1, fcgiRespBuffer, rax 
+	;;jmp exit
 
 read_data:
-    fcgiResponse r15, fcgi_response_buffer, 1024 ;; read the next chunk of data
+    	fcgiResponse r15, fcgi_response_buffer, 1024 ;; read the next chunk of data
 
-    cmp rax, 0 ;; check if we reached end of stream
-    je write_data ;; if no more data, move to writing
+    	cmp rax, 0 ;; check if we reached end of stream
+    	je write_data ;; if no more data, move to writing
 
-    ;; Otherwise, increment counter and continue reading
-    add rbx, rax ;; increment byte counter by the number of bytes read
-    jmp read_data ;; continue reading
+    	;; Otherwise, increment counter and continue reading
+    	add rbx, rax ;; increment byte counter by the number of bytes read
+    	jmp read_data ;; continue reading
+
 write_data:
-    ;; Now we write the data
-    mov rdi, 1               ;; File descriptor 1 (stdout)
-    mov rsi, fcgi_response_buffer ;; Data to write
-    mov rdx, rbx             ;; Number of bytes to write (from the byte counter)
-    syscall  
-php_fork:
-	mov rax, 57 ;; sys call fork
-	syscall
-	
-	test rax, rax
-	jz php_exec
-	jg close ;; close r12 and r13 in fork
-
-php_exec:
-
-    	;; write HTTP headers
-    	mov rax, 1
-    	mov rdi, r13
-    	mov rsi, http_php_header
-    	mov rdx, http_php_header_len
+    	;; Now we write the data
+    	mov rdi, 1               ;; File descriptor 1 (stdout)
+    	mov rsi, fcgi_response_buffer ;; Data to write
+    	mov rdx, rbx             ;; Number of bytes to write (from the byte counter)
     	syscall
-
-	 ;; Redirect stdout (fd 1) to the socket (r13)
-    	mov rdi, r13           ;; rdi = socket (r13)
-    	mov rsi, 1             ;; rsi = stdout (fd 1)
-    	mov rax, 33            ;; syscall number for dup2
-    	syscall
-
-    ;; Redirect stderr (fd 2) to the socket (r13) as well (optional)
-    	mov rdi, r13           ;; rdi = socket (r13)
-    	mov rsi, 2             ;; rsi = stderr (fd 2)
-    	mov rax, 33            ;; syscall number for dup2
-    	syscall
-
-	;; close setsockopt
-	;; r13 must never close on exec
-	mov rax, 3
-	mov rdi, r12
-	syscall
-
-	mov rdi, execPath
-	mov rsi, execArgs
-	mov rdx, 0
-	exec execPath, execArgs
-
-php_result:
-	
-    	;; write HTTP headers
-    	mov rax, 1
-    	mov rdi, r13
-    	mov rsi, http_php_header
-    	mov rdx, http_php_header_len
-    	syscall
+	jmp close
 
 handle_requests:
 	
@@ -400,7 +357,7 @@ close:
 	jmp main	
 exit:	
 	mov rax, 60
-	mov rdx, rdx
+	mov rdi, 69 ;; exit code 69 is optional code
 	syscall
 
 
@@ -412,12 +369,6 @@ dd 0
 dq 0
 
 indexHtmlPath db 'index.html',0
-indexPhpPath db 'index.php',0
-
-http_php_header  db 'HTTP/1.1 200 OK',13,10
-             db 'Content-Type: text/plain',13,10 ;; it should set type for each file seperatly
-             db 'Connection: close',13,10,13,10
-http_php_header_len = $ - http_php_header
 
 http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10
@@ -425,67 +376,29 @@ http_html_header_len = $ - http_html_header
 
 del db 0xa, 0
 
-execPath db "/usr/bin/php", 0
-
-execArgs:
-	dq execPath
-	dq indexPhpPath
-	dq 0
-execArgsCount dd 2
-
 sockaddr:
 	db 1, 0 ;; af_unix = 1
 	db "/run/php/php7.0-fpm.sock", 0
 
+;; https://fastcgi-archives.github.io/FastCGI_Specification.html#S5.1
 fcgi_begin:
-	db 1              ; version
-    	db 1              ; FCGI_BEGIN_REQUEST
-    	db 0              ; requestIdB1
-    	db 1              ; requestIdB0
-    	db 0              ; contentLengthB1
-    	db 8              ; contentLengthB0
-    	db 0              ; paddingLength
-    	db 0              ; reserved
-    	db 0              ; roleB1
-    	db 1              ; roleB0 (FCGI_RESPONDER)
-    	db 0              ; flags
-    	db 0, 0, 0, 0, 0  ; reserved[5]
-
+	db 0 ;; high byte roleB0
+	db 1 ;; low byte roleB1
+	db 0 ;; flags
+	db 5 dup(0)
 fcgi_begin_length = $ - fcgi_begin
-
+	
 fcgi_params:
-	; Example: REQUEST_METHOD=GET
-    	db 13         ; Key length: 13 (REQUEST_METHOD)
-    	db "REQUEST_METHOD"  ; Key: "REQUEST_METHOD"
-    	db 3          ; Value length: 3 ("GET")
-    	db "GET"       ; Value: "GET"
-
-    	; Example: SCRIPT_FILENAME=/path/to/index.php
-    	db 9         ; Key length: 15 (SCRIPT_FILENAME)
-    	db "SCRIPT_FILENAME"
-    	db  9        ; Value length: 19 ("/path/to/index.php")
-    	db "index.php"
-
- 	; Example: QUERY_STRING (if any)
-    	db 13         ; Key length: 13 (QUERY_STRING)
-    	db "QUERY_STRING"
-    	db 0          ; Value length: 0 (empty for GET without query string)
-    	db ""
-
+		
 fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
 
 
 fcgi_stdin:
-    	db 1              ; version
-    	db 5              ; FCGI_STDIN
-    	db 0              ; requestIdB1
-    	db 1              ; requestIdB0
-    	db 0              ; contentLengthB1
-    	db 0              ; contentLengthB0
-    	db 0              ; paddingLength
-    	db 0              ; reserved
+
 fcgi_stdin_length = $ - fcgi_stdin
 
 
- 
+fcgi_params_end:
+		
+fcgi_params_end_length = $ - fcgi_params_end 
 

@@ -31,7 +31,7 @@ fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
 optval dd 1  ; int 1 for SO_REUSEADDR
 
-bufferHeaders dq 8
+bufferHeaders rb 8
 
 ;;creating socket
 macro socket Domain, Type, Protocol
@@ -114,7 +114,7 @@ end macro
 
 macro fcgiHeaders sockfd, type, requestId, contentLength, paddingLength
 	mov byte [bufferHeaders], 1 ;; version = 1 
-	mov byte [bufferHeaders + 1 ], type ;; 
+	mov byte [bufferHeaders + 1 ], type ;; its variable 
 	mov word [bufferHeaders + 2], requestId ;; 2 bytes
 	mov word [bufferHeaders + 4], contentLength ;; 2 bytes
 	mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
@@ -151,7 +151,7 @@ macro fcgiEndParamsRequest fd, buffer, length
 
 end macro
 
-macro fcgiStdinRequest fd, buffer, requestId
+macro fcgiStdinRequest fd, requestId
 
 	 fcgiHeaders fd, FCGI_STDIN, requestId, 0, 0
 
@@ -280,19 +280,20 @@ index_file_load:
 
 php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
-	mov r15, rax
+	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
 	fcgiHeaders r15, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
+		
+	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 	
-	fcgiBeginRequest rax, fcgi_begin, fcgi_begin_length 
-	
-	fcgiParamsRequest rax, fcgi_params, fcgi_params_length
+	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
 
-	fcgiEndParamsRequest rax, fcgi_endparams, fcgi_endparams_length
+	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length
 	
-	fcgiStdinRequest r15, 0, 1 ;; 0 is empty file descriptor
-	;;fcgiResponse r15, fcgi_response_buffer, 1024
+	fcgiStdinRequest r15, 1 
+	fcgiResponse r15, fcgi_response_buffer, 1024
+jmp exit
 	
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6

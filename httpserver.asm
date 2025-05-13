@@ -297,10 +297,10 @@ php_fpm:
 	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
-	fcgiHeaders r15, fcgi_headers, fcgi_headers_length
+	fcgiHeaders r15, fcgi_headers_begin, fcgi_headersbegin_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 
-	fcgiHeaders r15, fcgi_headers, fcgi_headers_length
+	fcgiHeaders r15, fcgi_headers_params, fcgi_headersparams_length
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
 		
 	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length
@@ -308,12 +308,11 @@ php_fpm:
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length
 	fcgiResponse r15, fcgi_response_buffer, 1024
 
-	
 	jmp exit
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6
 	cmp al, 6 ;; check if successful
-	jne exit ;; error mesg
+	;;jne exit ;; error mesg
 	
 	;;jmp read_data
 	;;mov rdi, fcgi_response_buffer
@@ -433,17 +432,28 @@ fcgi_begin:
 	db 5 dup(0) ;;
 fcgi_begin_length = $ - fcgi_begin
 
-fcgi_headers:
+fcgi_headers_begin:
 	db 1 ;; version = 1
-	db 1 ;; type
+	db 1 ;; type = 1
 	db 0 
 	db 1 
-	db 0
 	db 8
 	db 0
 	db 0 
-fcgi_headers_length = $ - fcgi_headers
+	db 0
+fcgi_headersbegin_length = $ - fcgi_headers_begin
 	
+fcgi_headers_params:
+        db 1 ;; version = 1
+        db 4 ;; type = 1
+        db 0
+        db 1
+	db 0
+	db 8
+        db 0
+        db 0
+fcgi_headersparams_length = $ - fcgi_headers_begin
+
 fcgi_params:
 
 	;; struct in C: name_len value_len name_byte value_byte	

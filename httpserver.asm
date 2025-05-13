@@ -445,7 +445,7 @@ fcgi_headersbegin_length = $ - fcgi_headers_begin
 	
 fcgi_headers_params:
         db 1 ;; version = 1
-        db 4 ;; type = 1
+        db 4 ;; type = 4
         db 0
         db 1
 	db 0

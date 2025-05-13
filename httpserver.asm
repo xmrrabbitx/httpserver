@@ -112,36 +112,41 @@ macro connect Rdi, Rsi, Rdx
 	syscall
 end macro
 
-macro fcgiHeaders sockfd, type, requestId, contentLength, paddingLength
-	mov byte [bufferHeaders], 1 ;; version = 1 
-	mov byte [bufferHeaders + 1 ], type ;; its variable 
-	mov word [bufferHeaders + 2], requestId ;; 2 bytes
-	mov word [bufferHeaders + 4], contentLength ;; 2 bytes
-	mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
- 	mov byte [bufferHeaders + 7], 0 ;; reserved
+macro fcgiHeaders fd, buffer, length
+
+	push rax rdi rsi rdx
 	
-	write sockfd, bufferHeaders, 8	
+	;;mov byte [bufferHeaders], 1 ;; version = 1 
+	;;mov byte [bufferHeaders + 1 ], type ;; its variable 
+	;;mov word [bufferHeaders + 2], requestId ;; 2 bytes
+	;;mov word [bufferHeaders + 4], contentLength ;; 2 bytes
+	;;mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
+ 	;;mov byte [bufferHeaders + 7], 0 ;; reserved
+	
+	mov rax, SYS_WRITE
+        mov rdi, fd
+        mov rsi, buffer
+        mov rdx, length
+        syscall
+	;;write sockfd, bufferHeaders, 8	
+
+	pop rax rdi rsi rdx
 end macro
 
 macro fcgiBeginRequest fd, buffer, length
-
-	fcgiHeaders fd, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
-
+	
 	mov rax, SYS_WRITE
-	mov rdi, rax;;fd
+	mov rdi, fd
 	mov rsi, buffer
 	mov rdx, length
 	syscall
 
 end macro
 
-
 macro fcgiParamsRequest fd, buffer, length
 	
-	fcgiHeaders fd, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
-
 	mov rax, SYS_WRITE
-	mov rdi, rax;;fd 
+	mov rdi, fd 
 	mov rsi, buffer
 	mov rdx, length
 	syscall
@@ -155,8 +160,8 @@ macro fcgiEndParamsRequest fd, buffer, length
 end macro
 
 macro fcgiStdinRequest fd, requestId
-
-	 fcgiHeaders fd, FCGI_STDIN, requestId, 0, 0
+	
+	
 
 end macro
 
@@ -285,9 +290,12 @@ php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
 	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
-
-	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 	
+	fcgiHeaders r15, fcgi_headers, fcgi_headers_length
+	
+	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
+
+	jmp exit	
 	fcgiParamsRequest rax, fcgi_params, fcgi_params_length
 	
 	fcgiEndParamsRequest rax, fcgi_endparams, fcgi_endparams_length
@@ -405,11 +413,20 @@ sockaddr:
 
 ;; https://fastcgi-archives.github.io/FastCGI_Specification.html#S5.1
 fcgi_begin:
-	db 0 ;; high byte roleB0
-	db 1 ;; low byte roleB1
+	db 0 ;; high byte roleB1
+	db 1 ;; low byte roleB0
 	db 0 ;; flags
 	db 5 dup(0) ;;
 fcgi_begin_length = $ - fcgi_begin
+
+fcgi_headers:
+	db 1
+	db 1
+	db 2
+	db 2
+	db 1
+	db 0
+fcgi_headers_length = $ - fcgi_headers
 	
 fcgi_params:
 

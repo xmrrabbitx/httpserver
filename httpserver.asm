@@ -115,24 +115,13 @@ macro connect Rdi, Rsi, Rdx
 end macro
 
 macro fcgiHeaders fd, buffer, length
-
-	push rax rdi rsi rdx
-	
-	;;mov byte [bufferHeaders], 1 ;; version = 1 
-	;;mov byte [bufferHeaders + 1 ], type ;; its variable 
-	;;mov word [bufferHeaders + 2], requestId ;; 2 bytes
-	;;mov word [bufferHeaders + 4], contentLength ;; 2 bytes
-	;;mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
- 	;;mov byte [bufferHeaders + 7], 0 ;; reserved
 	
 	mov rax, SYS_WRITE
         mov rdi, fd
         mov rsi, buffer
         mov rdx, length
         syscall
-	;;write sockfd, bufferHeaders, 8	
 
-	pop rax rdi rsi rdx
 end macro
 
 macro fcgiBeginRequest fd, buffer, length
@@ -297,13 +286,13 @@ php_fpm:
 	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
-	fcgiHeaders r15, fcgi_headers_begin, fcgi_headersbegin_length
-	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
-	
-	fcgiHeaders r15, fcgi_headers_params, fcgi_headersparams_length
+	;;fcgiHeaders r15, fcgi_headers_begin, fcgi_headersbegin_length
+	fcgiBeginRequest r15, fcgi_begin_request, fcgi_begin_request_length 
+
+	;;fcgiHeaders r15, fcgi_headers_params, fcgi_headersparams_length
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
 		
-	fcgiEndParamsRequest r15, fcgi_endparams, fcgi_endparams_length
+	fcgiEndParamsRequest r15, fcgi_end_params, fcgi_end_params_length
 		
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length
 	fcgiResponse r15, fcgi_response_buffer, 1024
@@ -437,13 +426,25 @@ fcgi_headers_begin:
 	db 1 ;; type = 1
 	db 0 
 	db 1 
+	db 0
 	db 8
 	db 0
 	db 0 
 	db 0
 fcgi_headersbegin_length = $ - fcgi_headers_begin
+
+fcgi_begin_request:
+    ; Header (8 bytes)
+    db 1, 1, 0, 1   ; version, type, requestId
+    db 0, 8, 0, 0   ; contentLength=8, padding=0
+    ; Body (8 bytes)
+    db 0, 1, 0, 0   ; role=FCGI_RESPONDER(1), flags=0
+    db 0, 0, 0, 0   ; reserved
+fcgi_begin_request_length = $ - fcgi_begin_request
+
+fcgi_params:
+
 	
-fcgi_headers_params:
         db 1 ;; version = 1
         db 4 ;; type = 4
         db 0
@@ -452,9 +453,6 @@ fcgi_headers_params:
 	db 48
         db 0
         db 0
-fcgi_headersparams_length = $ - fcgi_headers_begin
-
-fcgi_params:
 
 	;; struct in C: name_len value_len name_byte value_byte	
 	db 15 ;; name length
@@ -504,18 +502,12 @@ fcgi_params:
 
 fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
 
-fcgi_endparams:
-	db 0 ;; empty params request 
+fcgi_end_params:
+    db 1,4,0,1, 0,0,0,0  ; type=4 (PARAMS), length=0
+fcgi_end_params_length = $ - fcgi_end_params
 
-fcgi_endparams_length = $ - fcgi_endparams
-	
+; 2. Then send STDIN (your existing code is correct)
 fcgi_stdin:
-	db 1 ;; version = 1 
-	db 5 ;; type
-	db 0 ;; requestIdB1 high byte
-	db 1 ;; requestIdB0 low byte
-	db 0 ;; contentLengthB1
-	db 0 ;; contentLengthB0
-	db 0 ;; paddingLength
-	db 0 ;; reserved_stdin		
+    db 1,5,0,1, 0,0,0,0  ; type=5 (STDIN), length=0
 fcgi_stdin_length = $ - fcgi_stdin
+	

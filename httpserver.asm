@@ -307,21 +307,7 @@ php_fpm:
 		
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length
 	fcgiResponse r15, fcgi_response_buffer, 1024
-	mov [bytesReadPhp], rax	
 
-    	mov rax, 1
-    	mov rdi, r13
-    	mov rsi, http_php_header
-    	mov rdx, http_php_header_len
-    	syscall
-
-	mov rax, 1
-	mov rdi, r13
-	mov rsi, [fcgi_response_buffer + 8] 
-	mov rdx, 1024
-	sub rdx, 8
-	syscall
-	jmp close
 	
 	jmp exit
 	mov rdi, fcgi_response_buffer

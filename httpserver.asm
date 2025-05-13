@@ -12,6 +12,9 @@ SYS_ACCEPT = 43
 SYS_OPEN = 2 ;; open file
 SYS_EXEC = 59 ;; exec syscall
 
+FCGI_BEGIN_REQUEST = 1
+FCGI_STDIN = 5
+
 af_inet = 2
 af_unix = 1
 domain = af_inet ;; af_inet = 2
@@ -28,6 +31,7 @@ fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
 optval dd 1  ; int 1 for SO_REUSEADDR
 
+bufferHeaders dq 8
 
 ;;creating socket
 macro socket Domain, Type, Protocol
@@ -108,6 +112,18 @@ macro connect Rdi, Rsi, Rdx
 	syscall
 end macro
 
+macro fcgiHeaders sockfd, type, requestId, contentLength, paddingLength
+	mov byte [bufferHeaders], 1 ;; version = 1 
+	mov byte [bufferHeaders + 1 ], type ;; 
+	mov word [bufferHeaders + 2], requestId ;; 2 bytes
+	mov word [bufferHeaders + 4], contentLength ;; 2 bytes
+	mov byte [bufferHeaders + 6], paddingLength ;; 1 byte
+ 	mov byte [bufferHeaders + 7], 0 ;; reserved
+	
+	write sockfd, bufferHeaders, 8
+	
+end macro
+
 macro fcgiBeginRequest fd, buffer, length
 
 	mov rax, SYS_WRITE
@@ -129,13 +145,15 @@ macro fcgiParamsRequest fd, buffer, length
 
 end macro
 
-macro fcgiStdinRequest fd, buffer, length
+macro fcgiEndParamsRequest fd, buffer, length
+	
+	write fd, buffer, length
 
-	mov rax, SYS_WRITE
-	mov rdi, fd 
-	mov rsi, buffer
-	mov rdx, length
-	syscall
+end macro
+
+macro fcgiStdinRequest fd, buffer, requestId
+
+	 fcgiHeaders fd, FCGI_STDIN, requestId, 0, 0
 
 end macro
 
@@ -265,14 +283,16 @@ php_fpm:
 	mov r15, rax
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
-	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
+	fcgiHeaders r15, FCGI_BEGIN_REQUEST, 1,  fcgi_begin_length, 0 
+	
+	fcgiBeginRequest rax, fcgi_begin, fcgi_begin_length 
+	
+	fcgiParamsRequest rax, fcgi_params, fcgi_params_length
 
-	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
-
-	jmp exit
-	fcgiParamsRequest r15, fcgi_params_end, fcgi_params_end_length
-	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length 
-	fcgiResponse r15, fcgi_response_buffer, 1024
+	fcgiEndParamsRequest rax, fcgi_endparams, fcgi_endparams_length
+	
+	fcgiStdinRequest r15, 0, 1 ;; 0 is empty file descriptor
+	;;fcgiResponse r15, fcgi_response_buffer, 1024
 	
 	mov rdi, fcgi_response_buffer
 	mov al, [rdi+1] ;; response type is 6
@@ -439,14 +459,12 @@ fcgi_params:
 
 fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
 
+fcgi_endparams:
+	db 0 ;; empty params request 
 
-fcgi_stdin:
+fcgi_endparams_length = $ - fcgi_endparams
+	
+fcgi_stdin:	
 	
 
 fcgi_stdin_length = $ - fcgi_stdin
-
-
-fcgi_params_end:
-		
-fcgi_params_end_length = $ - fcgi_params_end 
-

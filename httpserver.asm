@@ -286,14 +286,13 @@ php_fpm:
 	mov r15, rax ;; sockfd
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	
-	;;fcgiHeaders r15, fcgi_headers_begin, fcgi_headersbegin_length
 	fcgiBeginRequest r15, fcgi_begin_request, fcgi_begin_request_length 
-
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
-		
+	
 	fcgiEndParamsRequest r15, fcgi_end_params, fcgi_end_params_length
-		
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length
+	
+	jmp exit
 	fcgiResponse r15, fcgi_response_buffer, 1024
 
 	jmp exit
@@ -420,75 +419,6 @@ fcgi_begin:
 	db 5 dup(0) ;;
 fcgi_begin_length = $ - fcgi_begin
 
-fcgi_headers_begin:
-	db 1 ;; version = 1
-	db 1 ;; type = 1
-	db 0 
-	db 1 
-	db 0
-	db 8
-	db 0
-	db 0 
-	db 0
-fcgi_headersbegin_length = $ - fcgi_headers_begin
 
-fcgi_begin_request:
-    ; Header (8 bytes)
-    db 1, 1, 0, 1   ; version, type, requestId
-    db 0, 8, 0, 0   ; contentLength=8, padding=0
-    ; Body (8 bytes)
-    db 0, 1, 0, 0   ; role=FCGI_RESPONDER(1), flags=0
-    db 0, 0, 0, 0   ; reserved
-fcgi_begin_request_length = $ - fcgi_begin_request
 
-fcgi_params:
-    ; Header (8 bytes)
-    db 1, 4, 0, 1        ; version=1, type=4(PARAMS), requestId=1
-    db 0, 224, 0, 0      ; contentLength=224, padding=0
 
-    ; Parameter 1: SCRIPT_FILENAME
-    db 0x0F, 0x00        ; nameLength=15
-    db 0x1F, 0x00        ; valueLength=31
-    db 'SCRIPT_FILENAME', 0
-    db '/home/ahmad/assembly/index.php', 0
-
-    ; Parameter 2: REQUEST_METHOD
-    db 0x0E, 0x00        ; nameLength=14
-    db 0x03, 0x00        ; valueLength=3
-    db 'REQUEST_METHOD', 0
-    db 'GET', 0
-
-    ; Parameter 3: CONTENT_LENGTH
-    db 0x0E, 0x00
-    db 0x01, 0x00
-    db 'CONTENT_LENGTH', 0
-    db '0', 0
-
-    ; Parameter 4: SERVER_PROTOCOL
-    db 0x0F, 0x00
-    db 0x08, 0x00
-    db 'SERVER_PROTOCOL', 0
-    db 'HTTP/1.1', 0
-
-    ; Parameter 5: GATEWAY_INTERFACE
-    db 0x11, 0x00
-    db 0x07, 0x00
-    db 'GATEWAY_INTERFACE', 0
-    db 'CGI/1.1', 0
-
-    ; Parameter 6: REQUEST_URI
-    db 0x0B, 0x00
-    db 0x0A, 0x00
-    db 'REQUEST_URI', 0
-    db '/index.php', 0
-fcgi_params_length = $ - fcgi_params
-
-fcgi_end_params:
-    db 1,4,0,1, 0,0,0,0  ; type=4 (PARAMS), length=0
-fcgi_end_params_length = $ - fcgi_end_params
-
-; 2. Then send STDIN (your existing code is correct)
-fcgi_stdin:
-    db 1,5,0,1, 0,0,0,0  ; type=5 (STDIN), length=0
-fcgi_stdin_length = $ - fcgi_stdin
-	

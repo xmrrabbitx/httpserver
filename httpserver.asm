@@ -267,8 +267,9 @@ php_fpm:
 	
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 
-	jmp exit	
 	fcgiParamsRequest r15, fcgi_params, fcgi_params_length
+
+	jmp exit
 	fcgiParamsRequest r15, fcgi_params_end, fcgi_params_end_length
 	fcgiStdinRequest r15, fcgi_stdin, fcgi_stdin_length 
 	fcgiResponse r15, fcgi_response_buffer, 1024
@@ -392,9 +393,9 @@ fcgi_params:
 
 	;; struct in C: name_len value_len name_byte value_byte	
 	db 15 ;; name length
-	db 22 ;;  value length
+	db 31 ;;  value length
 	db 'SCRIPT_FILENAME' ;; name byte
-	db "/home/ahmad/index.php" ;; value byte
+	db "/home/ahmad/assembly/index.php" ;; value byte
 	
 	db 14
 	db 3
@@ -402,7 +403,7 @@ fcgi_params:
 	db "GET"
 
 	db 14
-	db 0	
+	db 1
 	db "CONTENT_LENGTH"
 	db "0"
 		
@@ -440,6 +441,7 @@ fcgi_params_length = $ - fcgi_params ; Calculate the length of FCGI_PARAMS
 
 
 fcgi_stdin:
+	
 
 fcgi_stdin_length = $ - fcgi_stdin
 

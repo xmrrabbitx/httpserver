@@ -332,6 +332,10 @@ php_fpm:
 	fcgiHeadersRequest r15, fcgi_stdin, fcgi_stdin_length
 		
 	fcgiResponse r15, bytesReadPhp, 1024 ;; read response of php
+
+	movzx rbp, byte [bytesReadPhp+1] ;; type
+	;;cmp rbp, 6
+	;;jne close
 	
 	;; get content length of body
 	movzx rbx, byte [bytesReadPhp+4] ;; high byte
@@ -341,15 +345,15 @@ php_fpm:
 	;;add rbx, 8 ;; skip 8 bytes headers _ wrong approach
 	
 	lea r9, [bytesReadPhp + 8] ;; skip headers info
-	mov rdx, rbx ;; instead we skipp 8 bytes here
+	;;mov rdx, rbx ;; instead we skipp 8 bytes here
 
 	mov rsi, r9
 	mov rcx, rbx
 loop_php_headers:
 
-	cmp rcx, 4
-	;;jmp exit
-
+	;;cmp rcx, 4
+	;;jmp exit ;; err handling here
+ 	
 	cmp byte [rsi], 0x0D ;; \r
 	jne loop_php_headers_next	
 
@@ -370,8 +374,10 @@ loop_php_headers_next:
 
 loop_php_end:
 	add rsi, 4 ;; skip \r\n\r\n
-	mov r9, rsi
-	sub rbx, rcx
+	mov r9, rsi ;; skip headers 
+	sub rbx, rcx ;; recalculate length	
+	;sub rbx, 8 ;; subtract end params
+	;sub rbx, 8 ;; subtract stdin
 	write r13, http_php_header, http_php_header_length ;; response headers
 	
 	write r13, r9, rbx ;; php response
@@ -482,10 +488,10 @@ fcgi_begin_length = $ - fcgi_begin
 	
 fcgi_params_1:
 	db 15 ;; key length
-	db 30 ;; value length
+	db 23 ;; value length
 
 	db "SCRIPT_FILENAME"
-	db "/home/ahmad/assembly/index.php" ;; make it dynamic later
+	db "/var/www/html/index.php" ;; make it dynamic later
 fcgi_params_length_1 = $ - fcgi_params_1
 
 fcgi_params_2:

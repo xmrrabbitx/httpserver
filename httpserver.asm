@@ -199,7 +199,8 @@ main:
 	accept r12 ;; accept macro
 
 	mov r13, rax ;;result of acceppt, client socket fd	
-	;;read client socket request _ forexample curl request info
+	
+	;; read client socket request _ forexample curl request info
 	mov rax, 0
 	mov rdi, r13
 	mov rsi, socketResponse
@@ -210,14 +211,14 @@ main:
 
 	mov rsi, socketResponse
 	jmp get_space_method
+
 get_space_method:
 
-	cmp byte [rsi], ' '
+	cmp byte [rsi], ' ' ;; check on empty space after method
 	je get_method
 
-	inc rsi ;; mov to the nexy byte
+	inc rsi ;; move to the next byte
 
-	;;cmp rsi, socketResponse+8
 	jmp get_space_method
 
 get_method:
@@ -279,19 +280,18 @@ index_file_load:
 	
 	;; load php
 	mov rsi, indexPhpPath ;; load index.php file
-
+	
 	open rsi ;; open file
 	test rax, rax ;; check if rax < 0, rax < 0 means error
-	jge php_fpm    ;; incase of php fpm fastcgi
-
+	jge php_fpm    ;; in case of php fpm fastcgi
+	
 	mov rsi, indexHtmlPath ;; load index.html file
 
 	;; load html
 	open rsi ;; open file
-	cmp rax, -1 ;; check if file existed
-	;;jmp handle_requests
-
-	jmp handle_requests
+	test rax, rax	
+	jge handle_requests
+	jmp exit ;; error handling 
 
 php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
@@ -340,8 +340,8 @@ php_fpm:
 	;; get content length of body
 	movzx rbx, byte [bytesReadPhp+4] ;; high byte
 	movzx rcx, byte [bytesReadPhp+5] ;; low byte
-	shl rbx, 8
-	or rbx, rcx
+	shl rbx, 8 ;; shif left 8 bytes _ in C << 8
+	or rbx, rcx ;; bitwise ot between high and low bytes
 
 	lea r9, [bytesReadPhp + 8] ;; skip headers info
 
@@ -443,8 +443,8 @@ dw 0x901f
 dd 0
 dq 0
 
-indexHtmlPath db 'index.html',0
-indexPhpPath db 'index.php',0
+indexHtmlPath db '/var/www/html/index.html',0
+indexPhpPath db '/var/www/html/index.php',0
 
 http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10

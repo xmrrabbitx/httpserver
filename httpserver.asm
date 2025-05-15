@@ -31,6 +31,8 @@ fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
 optval dd 1  ; int 1 for SO_REUSEADDR
 
+rootPathBuff rb 2556
+
 paramBuff dq 0
 bytesReadPhp dq 0
 
@@ -228,10 +230,10 @@ get_method:
 	;; test print method name eg: GET or POST
 	;; this method pints socketResponse in length of rdx
 	;; which is subtracted before	
-    	;;mov rax, 1
-    	;;mov rdi, 1
-    	;;mov rsi, socketResponse
-	;;syscall
+    	;mov rax, 1
+    	;mov rdi, 1
+    	;mov rsi, socketResponse
+	;syscall
 
 	;; test print socketResponse	
     	;mov rax, 1
@@ -245,8 +247,6 @@ get_method:
 
 	xor rcx, rcx
 	;;jmp exit
-	;;jmp handle_requests
-	;;jmp find_url
 	jmp get_space_url
 	
 get_space_url:
@@ -254,26 +254,44 @@ get_space_url:
 	cmp byte [ rsi + rcx ], ' '
 	je get_url
 
-	inc rcx ;; mov to the nexy byte
+	inc rcx ;; mov to the next byte
 
 	;;cmp rsi, socketResponse+8
 	jmp get_space_url
 
 get_url:
+	;; get requested url
 	mov rdx, rcx	
     	mov rax, 1
     	mov rdi, 1
 	mov rsi, rsi
 	syscall
 
-	cmp byte [rsi+1], " " ;; check if url is just /
+	cmp byte [rsi+1], " " ;; check if url is just / no chars after /
 	je index_file_load ;; load index file 
 
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
 	inc rsi ;; move to next 1 byte to pass / of start url 
+
+	;; add rootPath before any url
+	push rsi ;; save url
+
+    	mov  rdi, rootPathBuff  ; destination
+    	mov  rsi, rootPath        ; root path = "/var/www/html"
+    	mov  rcx, 14              ; length /var/www/html
+    	rep  movsb                ; copy 14 bytes
+    	pop  rsi                  ; restore url
+
+;; prepend root path into rsi
+concateRegisters:
+    	lodsb                     
+    	stosb                    
+    	test al, al               
+    	jnz  concateRegisters      
 	
-	open rsi ;; open file
+	open rootPathBuff ;; open other files except index
 	jmp handle_requests
+	;;jmp exit
 
 ;; load index.php / index.html
 index_file_load:	
@@ -291,7 +309,7 @@ index_file_load:
 	open rsi ;; open file
 	test rax, rax	
 	jge handle_requests
-	jmp exit ;; error handling 
+	;;jmp exit ;; error handling 
 
 php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
@@ -412,6 +430,7 @@ handle_requests:
 	mov rsi, bufferHtml
 	mov rdx, [bytesReadHtml]
 	syscall
+	
 	jmp close
 close:
 	;;close fpm socket
@@ -428,7 +447,6 @@ close:
 	mov rax, 3
 	mov rdi, r12
 	syscall
-
 	jmp main	
 exit:	
 	mov rax, 60
@@ -443,8 +461,13 @@ dw 0x901f
 dd 0
 dq 0
 
-indexHtmlPath db '/var/www/html/index.html',0
-indexPhpPath db '/var/www/html/index.php',0
+rootPath db '/var/www/html/'
+indexHtmlPath:
+	db '/var/www/html/' 
+	db 'index.html',0
+indexPhpPath:
+	db '/var/www/html/'
+	db 'index.php',0
 
 http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10

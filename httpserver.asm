@@ -331,10 +331,10 @@ php_fpm:
 	fcgiHeadersRequest r15, fcgi_end_params, fcgi_end_params_length
 	fcgiHeadersRequest r15, fcgi_stdin, fcgi_stdin_length
 		
-	fcgiResponse r15, bytesReadPhp, 1024 ;; read response of php
+	fcgiResponse r15, bytesReadPhp, 1024 ;; read response of php _ make length dynamic later
 
-	movzx rbp, byte [bytesReadPhp+1] ;; type
-	;;cmp rbp, 6
+	movzx rbp, byte [bytesReadPhp+1] ;; type = 6
+	;;cmp rbp, 6 ;; in case of multiple responses
 	;;jne close
 	
 	;; get content length of body
@@ -342,17 +342,16 @@ php_fpm:
 	movzx rcx, byte [bytesReadPhp+5] ;; low byte
 	shl rbx, 8
 	or rbx, rcx
-	;;add rbx, 8 ;; skip 8 bytes headers _ wrong approach
-	
+
 	lea r9, [bytesReadPhp + 8] ;; skip headers info
-	;;mov rdx, rbx ;; instead we skipp 8 bytes here
 
 	mov rsi, r9
-	mov rcx, rbx
+	mov rcx, 0 ;; counter to count headers info
+;; skip headers until \r\n\r\n chars
 loop_php_headers:
 
-	;;cmp rcx, 4
-	;;jmp exit ;; err handling here
+	;;cmp rcx, 4 ;; if nothing found, throws error
+	;;jmp exit ;; err handling 
  	
 	cmp byte [rsi], 0x0D ;; \r
 	jne loop_php_headers_next	
@@ -369,15 +368,14 @@ loop_php_headers:
 	jmp loop_php_end
 loop_php_headers_next:
 	inc rsi
-	dec rcx
+	inc rcx
 	jmp loop_php_headers
 
 loop_php_end:
 	add rsi, 4 ;; skip \r\n\r\n
 	mov r9, rsi ;; skip headers 
-	sub rbx, rcx ;; recalculate length	
-	;sub rbx, 8 ;; subtract end params
-	;sub rbx, 8 ;; subtract stdin
+	sub rbx, rcx ;; recalculate length ( content len - counter )	
+	
 	write r13, http_php_header, http_php_header_length ;; response headers
 	
 	write r13, r9, rbx ;; php response

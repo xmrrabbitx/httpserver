@@ -279,19 +279,20 @@ get_url:
     	mov  rdi, rootPathBuff  ; destination
     	mov  rsi, rootPath        ; root path = "/var/www/html"
     	mov  rcx, 14              ; length /var/www/html
-    	rep  movsb                ; copy 14 bytes
+    	rep  movsb                ; copy 14 bytes from rsi to rdi
     	pop  rsi                  ; restore url
 
 ;; prepend root path into rsi
 concateRegisters:
-    	lodsb                     
-    	stosb                    
+    	lodsb  ;; load one byte to al             
+	stosb  ;; store the byte in al                  
     	test al, al               
     	jnz  concateRegisters      
 	
 	open rootPathBuff ;; open other files except index
-	jmp handle_requests
-	;;jmp exit
+	test rax,rax
+	jge handle_requests
+	jmp error_404
 
 ;; load index.php / index.html
 index_file_load:	
@@ -309,7 +310,7 @@ index_file_load:
 	open rsi ;; open file
 	test rax, rax	
 	jge handle_requests
-	;;jmp exit ;; error handling 
+	jmp error_noindex ;; error handling 
 
 php_fpm:
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
@@ -365,6 +366,7 @@ php_fpm:
 
 	mov rsi, r9
 	mov rcx, 0 ;; counter to count headers info
+
 ;; skip headers until \r\n\r\n chars
 loop_php_headers:
 
@@ -384,6 +386,7 @@ loop_php_headers:
 	jne loop_php_headers_next
 
 	jmp loop_php_end
+
 loop_php_headers_next:
 	inc rsi
 	inc rcx
@@ -452,7 +455,41 @@ exit:
 	mov rax, 60
 	mov rdi, 69 ;; exit code 69 is optional code
 	syscall
+ 
+error_404:
+	
+	;; write HTTP headers
+        mov rax, 1
+        mov rdi, r13
+        mov rsi, http_404_header
+        mov rdx, http_404_header_len
+        syscall
+	
+        mov rax, 1
+        mov rdi, r13
+        mov rsi, error404Msg
+        mov rdx, error404Msg_len 
+        syscall
 
+	jmp close
+
+
+error_noindex:
+	
+	;; write HTTP headers
+        mov rax, 1
+        mov rdi, r13
+        mov rsi, http_404_header
+        mov rdx, http_404_header_len
+        syscall
+	
+        mov rax, 1
+        mov rdi, r13
+        mov rsi, errorNoindexMsg
+        mov rdx, errorNoindexMsg_len 
+        syscall
+
+	jmp close
 
 segment readable writeable
 address:
@@ -460,6 +497,19 @@ dw af_inet
 dw 0x901f
 dd 0
 dq 0
+
+error404Msg db "Not Found: The requested URL was not found on this server."
+error404Msg_len = $ - error404Msg
+
+
+errorNoindexMsg db "Not Found: no index file found!"
+errorNoindexMsg_len = $ - errorNoindexMsg
+
+
+
+http_404_header  db 'HTTP/1.1 404',13,10
+             db 'Connection: close',13,10,13,10
+http_404_header_len = $ - http_404_header
 
 rootPath db '/var/www/html/'
 indexHtmlPath:

@@ -29,12 +29,14 @@ socketResponse rb 1024
 bytesReadHtml dq 0
 fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
-optval dd 1  ; int 1 for SO_REUSEADDR
+optReuseAddr dd 1  ; int 1 for SO_REUSEADDR
 
 rootPathBuff rb 2556
 
 paramBuff dq 0
 bytesReadPhp dq 0
+
+fcgi_param1_buf rb 1024
 
 ;;creating socket
 macro socket Domain, Type, Protocol
@@ -184,6 +186,25 @@ macro fcgiResponse fd, buffer, length
 
 end macro
 
+macro initfcgiparams1 key_name, key_len, value_path, value_len
+	mov byte [rdi], key_len 
+	mov byte [rdi+1], r9b ;; pass r9b instead of r9 or even value_len beacause r9 is 64bit and could not assign to 8 bytes, so r9b is 8 bytes of r9
+
+	
+	;; copy key to rdi
+	mov rsi, key_name
+	mov rcx, key_len
+	lea rdi, [rdi+2]
+	rep movsb
+
+	;; copy value to rdi
+	mov rsi, value_path
+	;;lea rdi, [rdi]
+	;;xor rcx, rcx
+	;;movzx rcx, value_len 
+	mov rcx, value_len
+	rep movsb
+end macro
 
 segment readable executable
 entry main
@@ -192,7 +213,7 @@ main:
 
 	mov r12, rax ;;copy socket fd to r12
 
-	sockopt r12, optval ;; reuse address after close
+	sockopt r12, optReuseAddr ;; reuse address after close
 	
 	bind r12, address ;; bind macro
 
@@ -203,7 +224,7 @@ main:
 	mov r13, rax ;;result of acceppt, client socket fd	
 	
 	;; read client socket request _ forexample curl request info
-	mov rax, 0
+	mov rax, SYS_READ
 	mov rdi, r13
 	mov rsi, socketResponse
 	mov rdx, 1024
@@ -269,36 +290,61 @@ get_url:
 
 	cmp byte [rsi+1], " " ;; check if url is just / no chars after /
 	je index_file_load ;; load index file 
-
+	
 	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
 	inc rsi ;; move to next 1 byte to pass / of start url 
 
 	;; add rootPath before any url
 	push rsi ;; save url
 
-    	mov  rdi, rootPathBuff  ; destination
+	;; append rootPath to url
+    	mov  rdi, rootPathBuff    ; destination
     	mov  rsi, rootPath        ; root path = "/var/www/html"
     	mov  rcx, 14              ; length /var/www/html
     	rep  movsb                ; copy 14 bytes from rsi to rdi
     	pop  rsi                  ; restore url
 
+	mov bl, 14
 ;; prepend root path into rsi
 concateRegisters:
     	lodsb  ;; load one byte to al             
 	stosb  ;; store the byte in al                  
-    	test al, al               
+    	inc bl ;; length of address
+	test al, al               
     	jnz  concateRegisters      
 	
 	open rootPathBuff ;; open other files except index
 	test rax,rax
-	jge handle_requests
-	jmp error_404
+	jl error_404
+	
+	xor rcx, rcx ;; reset rcx 
+	movzx rcx, bl ;;  make bl compatible with 64bits
+	sub rcx, 5 ;; point to start of .php
 
-;; load index.php / index.html
+	cmp byte [rootPathBuff+rcx],"."
+	jne handle_requests
+
+	cmp byte [rootPathBuff+rcx+1],"p"
+	jne handle_requests
+
+	cmp byte [rootPathBuff+rcx+2],"h"
+	jne handle_requests
+	
+	cmp byte [rootPathBuff+rcx+3],"p"
+	jne handle_requests
+
+	mov r8, rootPathBuff
+	add rcx, 4 ;; restore the actual length of url - null terminated
+	mov r9, rcx
+	jmp php_fpm
+
+;; load index.php or index.html
 index_file_load:	
 	
 	;; load php
 	mov rsi, indexPhpPath ;; load index.php file
+	mov r8, indexPhpPath
+	mov r9, indexPhpPath_len 	
 	
 	open rsi ;; open file
 	test rax, rax ;; check if rax < 0, rax < 0 means error
@@ -319,10 +365,31 @@ php_fpm:
 	
 	fcgiHeaders r15, fcgi_begin_headers, fcgi_begin_headers_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
+
+	mov rdi, fcgi_param1_buf
+	mov r11, rdi
+	initfcgiparams1 key_script_filename, 15, r8, r9 ;; r9 is length of url
+
+	;; get length of fcgiparams _ store in r9	
+	mov rdx, rdi
+	sub rdx, r11
+	xor r11, r11
+	mov r11, rdx
+	mov r9, r11
 	
-	fcgiParamHeaders r15, fcgi_params_length_1 
-	fcgiParamsRequest r15, fcgi_params_1, fcgi_params_length_1
+	;mov rsi, rdi
+	;mov rax, 1
+	;mov rdi, 1
+	;mov rdx, r9 ;;r11
+	;syscall
+;;jmp exit
+	fcgiParamHeaders r15, r9 
+	fcgiParamsRequest r15, fcgi_param1_buf, r9
 	
+	;; reset register for later usage
+	xor r11, r11
+	xor r9, r9
+
 	fcgiParamHeaders r15, fcgi_params_length_2 
 	fcgiParamsRequest r15, fcgi_params_2, fcgi_params_length_2
 
@@ -518,6 +585,7 @@ indexHtmlPath:
 indexPhpPath:
 	db '/var/www/html/'
 	db 'index.php',0
+indexPhpPath_len = $ - indexPhpPath
 
 http_html_header  db 'HTTP/1.1 200 OK',13,10
              db 'Connection: close',13,10,13,10
@@ -557,13 +625,16 @@ fcgi_begin:
 	db 5 dup(0) ;;
 fcgi_begin_length = $ - fcgi_begin
 	
-fcgi_params_1:
-	db 15 ;; key length
-	db 23 ;; value length
+key_script_filename db "SCRIPT_FILENAME"
+;;fcgi_params_1:
+	;;db 15 ;; key length
+	;;db 23 ;; value length
 
-	db "SCRIPT_FILENAME"
-	db "/var/www/html/index.php" ;; make it dynamic later
-fcgi_params_length_1 = $ - fcgi_params_1
+	;;db "SCRIPT_FILENAME"
+	;;db "/var/www/html/index.php" ;; make it dynamic later
+;;fcgi_params_length_1 = $ - fcgi_params_1
+
+
 
 fcgi_params_2:
 	db 14 ;; key length

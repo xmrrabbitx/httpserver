@@ -1,5 +1,5 @@
 ## httpserver written by fasm assembly
-### tested on ubuntu 20
+### tested on Arch and ubuntu 20
 #### ``download fasm compiler: https://flatassembler.net/download.php``
 #### compile httpserver: ``~$ fasm2 httpserver.asm``
 #### run server: ``~$ ./httpserver``

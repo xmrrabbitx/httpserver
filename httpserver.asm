@@ -1,5 +1,7 @@
 format ELF64 executable
 
+;; include necessary file
+include "./permissions/permission.asm"
 
 SYS_WRITE = 1
 SYS_READ = 0
@@ -209,6 +211,7 @@ end macro
 segment readable executable
 entry main
 main:
+	call www_data_permission ;; make fpm permissions	
 	socket domain, type, protocol ;; socket macro
 
 	mov r12, rax ;;copy socket fd to r12
@@ -281,12 +284,14 @@ get_space_url:
 	jmp get_space_url
 
 get_url:
-	;; get requested url
+
 	mov rdx, rcx	
-    	mov rax, 1
-    	mov rdi, 1
-	mov rsi, rsi
-	syscall
+	
+	;; print requested url
+    	;mov rax, 1
+    	;mov rdi, 1
+	;mov rsi, rsi
+	;syscall
 
 	cmp byte [rsi+1], " " ;; check if url is just / no chars after /
 	je index_file_load ;; load index file 
@@ -359,9 +364,13 @@ index_file_load:
 	jmp error_noindex ;; error handling 
 
 php_fpm:
+
 	socket phpfpmDomain, type, protocol ;; php fpm socket 
 	mov r15, rax ;; sockfd
+
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
+	test rax, rax
+	jl err_sockfpm_conn ;; check fpm permissions
 	
 	fcgiHeaders r15, fcgi_begin_headers, fcgi_begin_headers_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
@@ -377,12 +386,6 @@ php_fpm:
 	mov r11, rdx
 	mov r9, r11
 	
-	;mov rsi, rdi
-	;mov rax, 1
-	;mov rdi, 1
-	;mov rdx, r9 ;;r11
-	;syscall
-;;jmp exit
 	fcgiParamHeaders r15, r9 
 	fcgiParamsRequest r15, fcgi_param1_buf, r9
 	
@@ -558,6 +561,22 @@ error_noindex:
 
 	jmp close
 
+err_sockfpm_conn:
+       
+	;; write HTTP headers
+        mov rax, 1
+        mov rdi, r13
+        mov rsi, http_400_header
+        mov rdx, http_400_header_len
+        syscall
+	
+	mov rax, 1
+        mov rdi, r13
+        mov rsi, err_sockfpm_mssg
+        mov rdx, err_sockfpm_mssg_len 
+        syscall
+	jmp close
+
 segment readable writeable
 address:
 dw af_inet 
@@ -568,14 +587,20 @@ dq 0
 error404Msg db "Not Found: The requested URL was not found on this server."
 error404Msg_len = $ - error404Msg
 
-
 errorNoindexMsg db "Not Found: no index file found!"
 errorNoindexMsg_len = $ - errorNoindexMsg
 
+err_sockfpm_mssg db "Forbidden: you don't have permission to access php-fpm this server!"
+err_sockfpm_mssg_len = $ - err_sockfpm_mssg
 
+http_400_header:
+		db 'HTTP/1.1 400',13,10
+             	db 'Connection: close',13,10,13,10
+http_400_header_len = $ - http_400_header
 
-http_404_header  db 'HTTP/1.1 404',13,10
-             db 'Connection: close',13,10,13,10
+http_404_header:
+		db 'HTTP/1.1 404',13,10
+             	db 'Connection: close',13,10,13,10
 http_404_header_len = $ - http_404_header
 
 rootPath db '/var/www/html/'
@@ -603,7 +628,7 @@ del db 0xa, 0
 
 sockaddr:
 	db 1, 0 ;; af_unix = 1
-	db "/run/php/php7.0-fpm.sock", 0
+	db "/run/php/php-fpm.sock", 0
 
 
 fcgi_begin_headers:

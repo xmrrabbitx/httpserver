@@ -1,7 +1,11 @@
 format ELF64 executable
 
-;; include necessary file
+;; include necessary files
 include "./permissions/permission.asm"
+include "./check_space_method.asm"
+include "./get_method.asm"
+include "./check_space_url.asm"
+include "./get_url.asm"
 
 SYS_WRITE = 1
 SYS_READ = 0
@@ -12,7 +16,8 @@ SYS_LISTEN  = 50
 SYS_SETSOCKOPT = 54
 SYS_ACCEPT = 43
 SYS_OPEN = 2 ;; open file
-SYS_EXEC = 59 ;; exec syscall
+SYS_STAT = 262 ;; check type of file
+
 
 FCGI_BEGIN_REQUEST = 1
 FCGI_STDIN = 5
@@ -24,7 +29,6 @@ type = 1
 protocol = 0 ;; default value is 0
 phpfpmDomain = af_unix ;; af_unix = 1 
 
-
 fd dq 0
 bufferHtml rb 8192
 socketResponse rb 1024
@@ -33,16 +37,19 @@ fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
 optReuseAddr dd 1  ; int 1 for SO_REUSEADDR
 
-rootPathBuff rb 2556
+rootPathBuff rb 256
+statBuff rb 144
+reqRouteBuff rb 256
 
 paramBuff dq 0
 bytesReadPhp dq 0
 
 fcgi_param1_buf rb 1024
 
+testbuff rb 256
+
 ;;creating socket
 macro socket Domain, Type, Protocol
-	;;rdi   rsi   rdx   r10	  r8   r9
 	mov rax, SYS_SOCKET
 	mov rdi, Domain
 	mov rsi, Type
@@ -87,19 +94,11 @@ macro sockopt R12, Optval
 	syscall
 end macro
 
-macro open Rsi
-	;;open file index.html
+;; open dir/file
+macro open opDir
 	mov rax, SYS_OPEN
-	mov rdi, Rsi
+	mov rdi, opDir 
 	mov rsi, 0
-	syscall
-end macro
-
-macro exec execPath, execArgs
-	mov rax, SYS_EXEC
-	mov rdi, execPath
-	mov rsi, execArgs
-	mov rdx, 0 ;;execArgsCount
 	syscall
 end macro
 
@@ -192,7 +191,6 @@ macro initfcgiparams1 key_name, key_len, value_path, value_len
 	mov byte [rdi], key_len 
 	mov byte [rdi+1], r9b ;; pass r9b instead of r9 or even value_len beacause r9 is 64bit and could not assign to 8 bytes, so r9b is 8 bytes of r9
 
-	
 	;; copy key to rdi
 	mov rsi, key_name
 	mov rcx, key_len
@@ -201,9 +199,6 @@ macro initfcgiparams1 key_name, key_len, value_path, value_len
 
 	;; copy value to rdi
 	mov rsi, value_path
-	;;lea rdi, [rdi]
-	;;xor rcx, rcx
-	;;movzx rcx, value_len 
 	mov rcx, value_len
 	rep movsb
 end macro
@@ -236,96 +231,82 @@ main:
 	mov r14, rax ;; length of socket response
 
 	mov rsi, socketResponse
-	jmp get_space_method
 
-get_space_method:
+	call check_space_method ;; check space after method 
 
-	cmp byte [rsi], ' ' ;; check on empty space after method
-	je get_method
-
-	inc rsi ;; move to the next byte
-
-	jmp get_space_method
-
-get_method:
-	mov rdx, rsi
-	sub rdx, socketResponse ;; seperate method name lenght from socket response 
-
-	;; test print method name eg: GET or POST
-	;; this method pints socketResponse in length of rdx
-	;; which is subtracted before	
-    	;mov rax, 1
-    	;mov rdi, 1
-    	;mov rsi, socketResponse
-	;syscall
-
-	;; test print socketResponse	
-    	;mov rax, 1
-    	;mov rdi, 1
-    	;mov rsi, socketResponse
-    	;mov rdx, r14
-	;syscall
+	call get_method ;; get method url
 	
-	;;add rsi, rcx
-	inc rsi	
+	call check_space_url ;; check apace after url
 
-	xor rcx, rcx
-	;;jmp exit
-	jmp get_space_url
+	call get_url ;; get url from socket response
 	
-get_space_url:
-
-	cmp byte [ rsi + rcx ], ' '
-	je get_url
-
-	inc rcx ;; mov to the next byte
-
-	;;cmp rsi, socketResponse+8
-	jmp get_space_url
-
-get_url:
-
-	mov rdx, rcx	
-	
-	;; print requested url
-    	;mov rax, 1
-    	;mov rdi, 1
-	;mov rsi, rsi
-	;syscall
-
-	cmp byte [rsi+1], " " ;; check if url is just / no chars after /
-	je index_file_load ;; load index file 
-	
-	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
-	inc rsi ;; move to next 1 byte to pass / of start url 
-
-	;; add rootPath before any url
-	push rsi ;; save url
-
-	;; append rootPath to url
-    	mov  rdi, rootPathBuff    ; destination
-    	mov  rsi, rootPath        ; root path = "/var/www/html"
-    	mov  rcx, 14              ; length /var/www/html
-    	rep  movsb                ; copy 14 bytes from rsi to rdi
-    	pop  rsi                  ; restore url
-
-	mov bl, 14
 ;; prepend root path into rsi
 concateRegisters:
     	lodsb  ;; load one byte to al             
 	stosb  ;; store the byte in al                  
     	inc bl ;; length of address
 	test al, al               
-    	jnz  concateRegisters      
+    	jnz  concateRegisters     
+
+	;; check dir/file type
+	mov rax, SYS_STAT ;; 262
+	mov rdi, -100 ;; current dir
+	mov rsi, rootPathBuff 
+	mov rdx, statBuff
+	mov r10, 0 ;; flags = 0 its necessary
+	syscall
+
+	;; check SYS_STAT status
+	cmp rax, 0	
+	jl error_404 ;; throws error later	
+
+	;; you can see dir and files numbers in /usr/include/x86_64-linux-gnu/bits/stat.h
+	;; st_mode is on byte 24
+	mov eax, dword [statBuff+24]
+	and eax, 0xF000 ;; seperate permissions from type
+	mov dword [statBuff], eax
 	
+	cmp eax, 0x4000 ;; directory type
+	je route_request
+	jmp open_other_files
+
+route_request:
+	movzx rcx, bl
+	mov rbx, rcx
+	sub rbx, 1 ;; sub null terminated \0 	
+
+	;; check here for endian slash later
+
+	lea rdi, [reqRouteBuff]
+	mov  rsi, rootPathBuff
+	rep movsb
+
+	lea rdi, [reqRouteBuff+rbx]
+	mov rsi, indexPhpFile	
+	mov rcx, 9
+	rep movsb
+
+	add rbx, 9 ;; recalculate rbx + 9 
+	mov rax, 1
+	mov rdi, 1
+	mov rsi, reqRouteBuff
+	mov rdx, rbx
+	syscall
+	
+	mov r8, reqRouteBuff	
+	mov r9, rbx
+	jmp php_fpm
+ 
+open_other_files:
 	open rootPathBuff ;; open other files except index
 	test rax,rax
 	jl error_404
-	
+
 	xor rcx, rcx ;; reset rcx 
 	movzx rcx, bl ;;  make bl compatible with 64bits
+	
 	sub rcx, 5 ;; point to start of .php
-
+	
 	cmp byte [rootPathBuff+rcx],"."
 	jne handle_requests
 
@@ -338,10 +319,11 @@ concateRegisters:
 	cmp byte [rootPathBuff+rcx+3],"p"
 	jne handle_requests
 
-	mov r8, rootPathBuff
+	mov r8, rootPathBuff ;; buffer
 	add rcx, 4 ;; restore the actual length of url - null terminated
-	mov r9, rcx
+	mov r9, rcx ;; length
 	jmp php_fpm
+
 
 ;; load index.php or index.html
 index_file_load:	
@@ -590,11 +572,11 @@ error404Msg_len = $ - error404Msg
 errorNoindexMsg db "Not Found: no index file found!"
 errorNoindexMsg_len = $ - errorNoindexMsg
 
-err_sockfpm_mssg db "Forbidden: you don't have permission to access php-fpm this server!"
+err_sockfpm_mssg db "Forbidden: you don't have permission to access this server!"
 err_sockfpm_mssg_len = $ - err_sockfpm_mssg
 
 http_400_header:
-		db 'HTTP/1.1 400',13,10
+		db 'HTTP/1.1 500',13,10
              	db 'Connection: close',13,10,13,10
 http_400_header_len = $ - http_400_header
 
@@ -603,7 +585,10 @@ http_404_header:
              	db 'Connection: close',13,10,13,10
 http_404_header_len = $ - http_404_header
 
+indexPhpFile db 'index.php'
+
 rootPath db '/var/www/html/'
+
 indexHtmlPath:
 	db '/var/www/html/' 
 	db 'index.html',0
@@ -745,5 +730,3 @@ fcgi_stdin:
 	db 1
 	dp 4 dup(0)
 fcgi_stdin_length = $ - fcgi_stdin
-
-

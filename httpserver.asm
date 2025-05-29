@@ -39,6 +39,7 @@ optReuseAddr dd 1  ; int 1 for SO_REUSEADDR
 
 rootPathBuff rb 256
 statBuff rb 144
+slashUrlBuff rb 256
 reqRouteBuff rb 256
 
 paramBuff dq 0
@@ -276,23 +277,41 @@ route_request:
 	sub rbx, 1 ;; sub null terminated \0 	
 
 	;; check here for endian slash later
+	cmp byte [rootPathBuff+rbx-1], "/"
+	jne without_slash_url
+	jmp ending_slash_url
 
+without_slash_url:
+	
 	lea rdi, [reqRouteBuff]
-	mov  rsi, rootPathBuff
+	mov rsi, rootPathBuff
+	rep movsb
+	lea rdi, [reqRouteBuff+rbx]
+	mov rsi, slashChars	
+	mov rcx, 1
 	rep movsb
 
+	add rbx, 1
+
+	jmp final_req_url
+
+ending_slash_url:
+
+	;; store rootPathBuff in a larger rb
+	lea rdi, [reqRouteBuff]
+	mov  rsi, rootPathBuff
+	rep movsb	
+	jmp final_req_url
+
+final_req_url:
+	;; append indexPhpFile after reqRouteBuff
 	lea rdi, [reqRouteBuff+rbx]
 	mov rsi, indexPhpFile	
 	mov rcx, 9
 	rep movsb
 
 	add rbx, 9 ;; recalculate rbx + 9 
-	mov rax, 1
-	mov rdi, 1
-	mov rsi, reqRouteBuff
-	mov rdx, rbx
-	syscall
-	
+
 	mov r8, reqRouteBuff	
 	mov r9, rbx
 	jmp php_fpm
@@ -566,6 +585,8 @@ dw 0x901f
 dd 0
 dq 0
 
+slashChars db "/",0
+
 error404Msg db "Not Found: The requested URL was not found on this server."
 error404Msg_len = $ - error404Msg
 
@@ -636,15 +657,6 @@ fcgi_begin:
 fcgi_begin_length = $ - fcgi_begin
 	
 key_script_filename db "SCRIPT_FILENAME"
-;;fcgi_params_1:
-	;;db 15 ;; key length
-	;;db 23 ;; value length
-
-	;;db "SCRIPT_FILENAME"
-	;;db "/var/www/html/index.php" ;; make it dynamic later
-;;fcgi_params_length_1 = $ - fcgi_params_1
-
-
 
 fcgi_params_2:
 	db 14 ;; key length

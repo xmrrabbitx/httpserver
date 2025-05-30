@@ -37,10 +37,10 @@ fcgi_response_buffer rb 1024
 fcgiRespBuffer rb 1024
 optReuseAddr dd 1  ; int 1 for SO_REUSEADDR
 
-rootPathBuff rb 256
+rootPathBuff rb 1024
 statBuff rb 144
-slashUrlBuff rb 256
-reqRouteBuff rb 256
+slashUrlBuff rb 1024
+reqRouteBuff rb 1024
 
 paramBuff dq 0
 bytesReadPhp dq 0
@@ -188,20 +188,41 @@ macro fcgiResponse fd, buffer, length
 
 end macro
 
-macro initfcgiparams1 key_name, key_len, value_path, value_len
+;; init params url length < 128
+macro initfcgiparams1_l128 key_name, key_len, value_path, value_len
 	mov byte [rdi], key_len 
-	mov byte [rdi+1], r9b ;; pass r9b instead of r9 or even value_len beacause r9 is 64bit and could not assign to 8 bytes, so r9b is 8 bytes of r9
+	mov byte [rdi+1], r9b ;; < 128 _ pass r9b instead of r9 or even value_len beacause r9 is 64bit and could not assign to 8 bytes, so r9b is 8 bytes of r9
 
 	;; copy key to rdi
 	mov rsi, key_name
 	mov rcx, key_len
-	lea rdi, [rdi+2]
+	lea rdi, [rdi+2] ;; < 128
 	rep movsb
 
 	;; copy value to rdi
 	mov rsi, value_path
 	mov rcx, value_len
 	rep movsb
+end macro
+
+;; init params url length > 128
+macro initfcgiparams1_g128 key_name, key_len, value_path, encoded_len, value_len
+	  
+	;; make compatible with > 128 length
+    mov byte [rdi], key_len
+    mov eax, encoded_len
+    mov dword [rdi+1], eax
+    lea rdi, [rdi+5]
+    
+   ;; copy key to rdi
+    mov rsi, key_name
+    mov ecx, key_len
+    rep movsb
+    
+    ;; copy value to rdi
+    mov rsi, value_path
+    mov ecx, value_len
+    rep movsb
 end macro
 
 segment readable executable
@@ -376,9 +397,36 @@ php_fpm:
 	fcgiHeaders r15, fcgi_begin_headers, fcgi_begin_headers_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
 
+	;; check url length
+	cmp r9, 128
+	jge encode
+	jmp l128 ;; < 128
+
+encode:
+	mov eax, r9d ; zero-extend r9 -> eax
+	or eax, 0x80000000
+	bswap eax
+	mov r10d, eax
+	jmp g128 ;; > 128
+
+;; length < 128 
+l128:
+
+	;; init fcgi fcgi_param1 buff for request
 	mov rdi, fcgi_param1_buf
 	mov r11, rdi
-	initfcgiparams1 key_script_filename, 15, r8, r9 ;; r9 is length of url
+	initfcgiparams1_l128 key_script_filename, 15, r8, r9 ;; r9 is length of url
+	jmp fcgi_params_handle
+
+;; length > 128
+g128:
+	;; init fcgi fcgi_param1 buff for request
+	mov rdi, fcgi_param1_buf
+	mov r11, rdi
+	initfcgiparams1_g128 key_script_filename, 15, r8, r10d, r9d ;; r10d is encoded length of url
+	jmp fcgi_params_handle
+
+fcgi_params_handle:
 
 	;; get length of fcgiparams _ store in r9	
 	mov rdx, rdi

@@ -41,6 +41,7 @@ rootPathBuff rb 1024
 statBuff rb 144
 slashUrlBuff rb 1024
 reqRouteBuff rb 1024
+tmp_reqRouteBuff rb 1024
 
 paramBuff dq 0
 bytesReadPhp dq 0
@@ -209,6 +210,7 @@ end macro
 macro initfcgiparams1_g128 key_name, key_len, value_path, encoded_len, value_len
 	  
 	;; make compatible with > 128 length
+	;; set encoded length for value length
     mov byte [rdi], key_len
     mov eax, encoded_len
     mov dword [rdi+1], eax
@@ -220,6 +222,7 @@ macro initfcgiparams1_g128 key_name, key_len, value_path, encoded_len, value_len
     rep movsb
     
     ;; copy value to rdi
+	;; set value based on actual lenght not encoded length
     mov rsi, value_path
     mov ecx, value_len
     rep movsb
@@ -325,14 +328,40 @@ ending_slash_url:
 	jmp final_req_url
 
 final_req_url:
+
+	;; use for index.html case
+	mov rsi, reqRouteBuff
+	mov rdi, tmp_reqRouteBuff
+	mov rcx, 20 ;; length of /var/www/html/test
+	rep movsb
+
+	lea rdi, [tmp_reqRouteBuff+rbx]
+	mov rsi, indexHtmlFile	
+	mov rcx, 10 ;; length of index.html
+	rep movsb
+
 	;; append indexPhpFile after reqRouteBuff
 	lea rdi, [reqRouteBuff+rbx]
 	mov rsi, indexPhpFile	
-	mov rcx, 9
+	mov rcx, 9 ;; length of index.php
 	rep movsb
 
 	add rbx, 9 ;; recalculate rbx + 9 
 
+	open reqRouteBuff
+	test rax, rax
+	jl finalHtml
+	jmp route_php
+
+finalHtml:
+
+	add rbx, 10 ;; recalculate rbx + 10 
+
+	open tmp_reqRouteBuff
+	test rax, rax
+	jge handle_requests
+	
+route_php:
 	mov r8, reqRouteBuff	
 	mov r9, rbx
 	jmp php_fpm
@@ -403,9 +432,9 @@ php_fpm:
 	jmp l128 ;; < 128
 
 encode:
-	mov eax, r9d ; zero-extend r9 -> eax
-	or eax, 0x80000000
-	bswap eax
+	mov eax, r9d ;; zero-extend r9 -> eax 32bit
+	or eax, 0x80000000 ;; set bit 31 highest bit _ fastcgi knows its 4 byte
+	bswap eax ;; make 32bit value to big endian fastcgi accepts it beacause x86 is little endian
 	mov r10d, eax
 	jmp g128 ;; > 128
 
@@ -655,6 +684,7 @@ http_404_header:
 http_404_header_len = $ - http_404_header
 
 indexPhpFile db 'index.php'
+indexHtmlFile db 'index.html'
 
 rootPath db '/var/www/html/'
 

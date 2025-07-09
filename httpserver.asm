@@ -107,9 +107,9 @@ end macro
 macro write Rdi, Rsi, Rdx
 	mov rax, SYS_WRITE
 	mov rdi, Rdi 
-        mov rsi, Rsi 
-        mov rdx, Rdx 
-        syscall
+    mov rsi, Rsi 
+     mov rdx, Rdx 
+    syscall
 end macro
 
 macro connect Rdi, Rsi, Rdx
@@ -323,8 +323,9 @@ ending_slash_url:
 
 	;; store rootPathBuff in a larger rb
 	lea rdi, [reqRouteBuff]
-	mov  rsi, rootPathBuff
+	mov rsi, rootPathBuff
 	rep movsb	
+
 	jmp final_req_url
 
 final_req_url:
@@ -336,13 +337,13 @@ final_req_url:
 	rep movsb
 
 	lea rdi, [tmp_reqRouteBuff+rbx]
-	mov rsi, indexHtmlFile	
+	mov rsi, static_html_index_path	
 	mov rcx, 10 ;; length of index.html
 	rep movsb
 
-	;; append indexPhpFile after reqRouteBuff
+	;; append static_php_index_path after reqRouteBuff
 	lea rdi, [reqRouteBuff+rbx]
-	mov rsi, indexPhpFile	
+	mov rsi, static_php_index_path	
 	mov rcx, 9 ;; length of index.php
 	rep movsb
 
@@ -360,7 +361,8 @@ finalHtml:
 	open tmp_reqRouteBuff
 	test rax, rax
 	jge handle_requests
-	
+	jmp error_404
+
 route_php:
 	mov r8, reqRouteBuff	
 	mov r9, rbx
@@ -497,7 +499,7 @@ fcgi_params_handle:
 	
 	fcgiHeadersRequest r15, fcgi_end_params, fcgi_end_params_length
 	fcgiHeadersRequest r15, fcgi_stdin, fcgi_stdin_length
-		
+
 	fcgiResponse r15, bytesReadPhp, 1024 ;; read response of php _ make length dynamic later
 
 	movzx rbp, byte [bytesReadPhp+1] ;; type = 6
@@ -581,13 +583,14 @@ handle_requests:
 	mov rsi, bufferHtml
 	mov rdx, [bytesReadHtml]
 	syscall
-	
+
 	jmp close
 close:
+
 	;;close fpm socket
-        mov rax, 3
-        mov rdi, r15
-        syscall	
+    mov rax, 3
+    mov rdi, r15
+    syscall	
 
 	;;close socket 
 	mov rax, 3
@@ -598,6 +601,27 @@ close:
 	mov rax, 3
 	mov rdi, r12
 	syscall
+	jmp clear
+	
+clear:
+	;; reset reqRouteBuff to prevent overwitten values
+	xor rax, rax           ; Set AL = 0 (byte to write)
+	lea rdi, [reqRouteBuff] ; Destination = start of buffer
+	mov rcx, 256           ; Number of bytes to clear
+	rep stosb              ; Write AL (0) to [RDI], RCX times
+
+	;; reset rootPathBuff to prevent overwitten values
+	xor rax, rax           ; Set AL = 0 (byte to write)
+	lea rdi, [rootPathBuff] ; Destination = start of buffer
+	mov rcx, 256           ; Number of bytes to clear
+	rep stosb              ; Write AL (0) to [RDI], RCX times
+
+	;; reset tmp_reqRouteBuff to prevent overwitten values
+	xor rax, rax           ; Set AL = 0 (byte to write)
+	lea rdi, [tmp_reqRouteBuff] ; Destination = start of buffer
+	mov rcx, 256           ; Number of bytes to clear
+	rep stosb              ; Write AL (0) to [RDI], RCX times
+
 	jmp main	
 exit:	
 	mov rax, 60
@@ -675,16 +699,16 @@ err_sockfpm_mssg_len = $ - err_sockfpm_mssg
 
 http_400_header:
 		db 'HTTP/1.1 500',13,10
-             	db 'Connection: close',13,10,13,10
+        db 'Connection: close',13,10,13,10
 http_400_header_len = $ - http_400_header
 
 http_404_header:
 		db 'HTTP/1.1 404',13,10
-             	db 'Connection: close',13,10,13,10
+        db 'Connection: close',13,10,13,10
 http_404_header_len = $ - http_404_header
 
-indexPhpFile db 'index.php'
-indexHtmlFile db 'index.html'
+static_php_index_path db 'index.php'
+static_html_index_path db 'index.html'
 
 rootPath db '/var/www/html/'
 
@@ -696,10 +720,10 @@ indexPhpPath:
 	db 'index.php',0
 indexPhpPath_len = $ - indexPhpPath
 
-http_html_header  db 'HTTP/1.1 200 OK',13,10
-             db 'Connection: close',13,10,13,10
+http_html_header:  
+			db 'HTTP/1.1 200 OK',13,10
+            db 'Connection: close',13,10,13,10
 http_html_header_len = $ - http_html_header
-
 
 http_php_header: 
 	    	db "HTTP/1.1 200 OK", 13, 10
@@ -707,13 +731,11 @@ http_php_header:
     		db "Connection: close", 13, 10, 13, 10
 http_php_header_length = $ - http_php_header
 
-
-del db 0xa, 0
+del db 0xa, 0 ;; not used anywhere _ its new line character!
 
 sockaddr:
 	db 1, 0 ;; af_unix = 1
 	db "/run/php/php-fpm.sock", 0
-
 
 fcgi_begin_headers:
 	db 1 ;; version = 1
@@ -752,7 +774,6 @@ fcgi_params_3:
 	db "0" 
 fcgi_params_length_3 = $ - fcgi_params_3
 
-
 fcgi_params_4:
 	db 15 ;; key length
 	db 8 ;; value length
@@ -761,7 +782,6 @@ fcgi_params_4:
 	db "HTTP/1.1" 
 fcgi_params_length_4 = $ - fcgi_params_4
 
-
 fcgi_params_5:
 	db 17  ;; key length
 	db 7 ;; value length
@@ -769,7 +789,6 @@ fcgi_params_5:
 	db "GATEWAY_INTERFACE"
 	db "CGI/1.1" 
 fcgi_params_length_5 = $ - fcgi_params_5
-
 
 fcgi_params_6:
 	db 11  ;; key length
@@ -786,7 +805,6 @@ fcgi_params_7:
 	db "SERVER_NAME"
 	db "localhost" 
 fcgi_params_length_7 = $ - fcgi_params_7
-
 
 fcgi_params_8:
 	db 11 ;; key length
@@ -811,7 +829,6 @@ fcgi_end_params:
 	db 1
 	dp 4 dup(0)
 fcgi_end_params_length = $ - fcgi_end_params
-
 
 fcgi_stdin:
 	db 1

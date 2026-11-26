@@ -359,6 +359,7 @@ final_req_url:
 	open reqRouteBuff
 	test rax, rax
 	jl finalHtml
+	mov byte [indexFallback], 1 ;; directory index -> index.html fallback if fpm is down
 	jmp route_php
 
 finalHtml:
@@ -537,7 +538,17 @@ php_fpm:
 
 	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
 	test rax, rax
+	jge fpm_connected
+	;; retry with the distro package socket name (php8.x-fpm)
+	mov rax, SYS_CLOSE
+	mov rdi, r15
+	syscall
+	socket phpfpmDomain, type, protocol
+	mov r15, rax
+	connect r15, sockaddr_alt, 110
+	test rax, rax
 	jl err_sockfpm_conn ;; check fpm permissions
+fpm_connected:
 	
 	fcgiHeaders r15, fcgi_begin_headers, fcgi_begin_headers_length
 	fcgiBeginRequest r15, fcgi_begin, fcgi_begin_length 
@@ -736,6 +747,8 @@ clear:
 	mov rcx, 256           ; Number of bytes to clear
 	rep stosb              ; Write AL (0) to [RDI], RCX times
 
+	mov byte [indexFallback], 0 ;; reset per-request flag
+
 	jmp main	
 exit:	
 	mov rax, 60
@@ -778,6 +791,20 @@ error_noindex:
 	jmp close
 
 err_sockfpm_conn:
+
+	;; if this was a directory index request, fall back to index.html when fpm is down
+	cmp byte [indexFallback], 1
+	jne err_sockfpm_plain
+	mov rdi, r15           ;; close the unused fpm socket
+	mov rax, SYS_CLOSE
+	syscall
+	mov r15, -1
+	open tmp_reqRouteBuff
+	test rax, rax
+	jl err_sockfpm_plain
+	jmp handle_requests
+
+err_sockfpm_plain:
        
 	;; write HTTP headers
         mov rax, 1
@@ -801,6 +828,7 @@ dd 0
 dq 0
 
 ;; --- execution support data ---
+indexFallback db 0
 exec_kind db 0
 exec_file_fd dq 0
 exec_argv dq rootPathBuff, 0
@@ -863,6 +891,10 @@ del db 0xa, 0 ;; not used anywhere _ its new line character!
 sockaddr:
 	db 1, 0 ;; af_unix = 1
 	db "/run/php/php-fpm.sock", 0
+
+sockaddr_alt:
+	db 1, 0 ;; af_unix = 1
+	db "/run/php/php8.4-fpm.sock", 0
 
 fcgi_begin_headers:
 	db 1 ;; version = 1

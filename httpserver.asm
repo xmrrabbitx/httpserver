@@ -17,6 +17,11 @@ SYS_SETSOCKOPT = 54
 SYS_ACCEPT = 43
 SYS_OPEN = 2 ;; open file
 SYS_STAT = 262 ;; check type of file
+SYS_CLOSE = 3
+SYS_DUP2 = 33
+SYS_FORK = 57
+SYS_EXECVE = 59
+SYS_WAIT4 = 61
 
 
 FCGI_BEGIN_REQUEST = 1
@@ -45,6 +50,8 @@ tmp_reqRouteBuff rb 1024
 
 paramBuff dq 0
 bytesReadPhp dq 0
+requestUriPtr dq 0
+requestUriLen dq 0
 
 fcgi_param1_buf rb 1024
 
@@ -372,6 +379,7 @@ open_other_files:
 	open rootPathBuff ;; open other files except index
 	test rax,rax
 	jl error_404
+	mov [exec_file_fd], rax ;; remember opened fd (needed for static fallback)
 
 	xor rcx, rcx ;; reset rcx 
 	movzx rcx, bl ;;  make bl compatible with 64bits
@@ -379,21 +387,127 @@ open_other_files:
 	sub rcx, 5 ;; point to start of .php
 	
 	cmp byte [rootPathBuff+rcx],"."
-	jne handle_requests
+	je check_other_php
+	jmp try_exec
 
+check_other_php:
 	cmp byte [rootPathBuff+rcx+1],"p"
-	jne handle_requests
+	jne try_exec
 
 	cmp byte [rootPathBuff+rcx+2],"h"
-	jne handle_requests
+	jne try_exec
 	
 	cmp byte [rootPathBuff+rcx+3],"p"
-	jne handle_requests
+	jne try_exec
 
 	mov r8, rootPathBuff ;; buffer
 	add rcx, 4 ;; restore the actual length of url - null terminated
 	mov r9, rcx ;; length
 	jmp php_fpm
+
+;; decide whether the requested file should be executed (ELF binary or .so)
+try_exec:
+	;; scan filename backwards for a ".so" suffix (also matches lib.so.N)
+	movzx rbx, bl        ;; bl = length incl null terminator
+	sub rbx, 2           ;; index of last real character
+scan_so:
+	cmp rbx, 0
+	jle check_exec_bit
+	cmp byte [rootPathBuff+rbx], '.'
+	jne scan_so_dec
+	cmp byte [rootPathBuff+rbx+1], 's'
+	jne scan_so_dec
+	cmp byte [rootPathBuff+rbx+2], 'o'
+	je is_so_file
+scan_so_dec:
+	dec rbx
+	jmp scan_so
+
+is_so_file:
+	mov byte [exec_kind], 1 ;; 1 = shared library -> run via ld.so
+	jmp exec_prepare
+
+check_exec_bit:
+	;; execute only if any execute permission bit is set
+	mov eax, dword [statBuff+24]
+	test eax, 0x49       ;; 0o111 in low bits
+	jz serve_static
+	mov byte [exec_kind], 0 ;; 0 = regular executable
+	jmp exec_prepare
+
+serve_static:
+	mov rax, [exec_file_fd] ;; restore fd for handle_requests
+	jmp handle_requests
+
+;; send headers, fork, let the child write straight to the client socket
+exec_prepare:
+	mov r15, -1 ;; make sure close: does not close an inherited fpm fd
+
+	;; close the fd we opened just for detection
+	mov rax, SYS_CLOSE
+	mov rdi, [exec_file_fd]
+	syscall
+
+	;; HTTP headers first so the child body lands after them
+	mov rax, SYS_WRITE
+	mov rdi, r13
+	mov rsi, http_exec_header
+	mov rdx, http_exec_header_len
+	syscall
+
+	mov rax, SYS_FORK
+	syscall
+	test rax, rax
+	jl close             ;; fork failed (headers already sent) - just close
+	jz exec_child
+
+	;; parent: wait for child to finish
+	mov rdi, rax
+	mov rax, SYS_WAIT4
+	xor rsi, rsi
+	xor rdx, rdx
+	xor r10, r10
+	syscall
+	jmp close
+
+exec_child:
+	;; stdout / stderr -> client socket
+	mov rax, SYS_DUP2
+	mov rdi, r13
+	mov rsi, 1
+	syscall
+	mov rax, SYS_DUP2
+	mov rdi, r13
+	mov rsi, 2
+	syscall
+	;; do not keep the listening socket open in the child
+	mov rax, SYS_CLOSE
+	mov rdi, r12
+	syscall
+
+	cmp byte [exec_kind], 1
+	je exec_so_child
+
+	;; run compiled executable directly
+	mov rax, SYS_EXECVE
+	mov rdi, rootPathBuff
+	mov rsi, exec_argv
+	xor rdx, rdx
+	syscall
+	jmp exec_child_exit
+
+exec_so_child:
+	;; run shared library through the dynamic loader
+	mov rax, SYS_EXECVE
+	mov rdi, ldso_path
+	mov rsi, exec_ldso_argv
+	xor rdx, rdx
+	syscall
+
+exec_child_exit:
+	mov rax, 60
+	mov rdi, 1
+	syscall
 
 
 ;; load index.php or index.html
@@ -685,6 +799,19 @@ dw af_inet
 dw 0x901f
 dd 0
 dq 0
+
+;; --- execution support data ---
+exec_kind db 0
+exec_file_fd dq 0
+exec_argv dq rootPathBuff, 0
+ldso_path db '/lib64/ld-linux-x86-64.so.2', 0
+exec_ldso_argv dq ldso_path, rootPathBuff, 0
+
+http_exec_header:
+	db 'HTTP/1.1 200 OK',13,10
+	db 'Content-Type: text/plain',13,10
+	db 'Connection: close',13,10,13,10
+http_exec_header_len = $ - http_exec_header
 
 slashChars db "/",0
 

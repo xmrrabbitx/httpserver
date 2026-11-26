@@ -48,14 +48,26 @@ check_uri:
 	jmp check_uri
 end_url:
 	mov byte [rsi + r8], 0
+	;; save URL (with leading /) for REQUEST_URI FastCGI param
+	mov [requestUriPtr], rsi
+	mov [requestUriLen], r8
 	inc rsi
 	jmp cont
 pass:
 
-    cmp byte [rsi+1], " " ;; check if url is just / no chars after /
-    je index_file_load ;; load index file  
+    ;; save URL pointer (with leading /) for REQUEST_URI FastCGI param
+    mov [requestUriPtr], rsi
 
-	mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
+    cmp byte [rsi+1], " " ;; check if url is just / no chars after /
+    jne pass_regular ;; not root URL, go to regular handling
+
+    ;; Root URL ("/") case - rdx=1, same handling as regular below
+    ;; Falls through to cont, directory routing handles index.php
+
+pass_regular:
+    mov byte [rsi + rdx], 0 ; null-terminate the URL before using it
+    ;; save URL length for REQUEST_URI param (rdx=1 for root URL)
+    mov [requestUriLen], rdx
     inc rsi ;; move to next 1 byte to pass / of start url
 
 cont:

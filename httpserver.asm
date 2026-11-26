@@ -533,21 +533,22 @@ index_file_load:
 
 php_fpm:
 
-	socket phpfpmDomain, type, protocol ;; php fpm socket 
+	;; try each known fpm socket in order until one connects
+	lea rbx, [fpmSockets]
+php_try_fpm:
+	mov r10, [rbx]
+	test r10, r10
+	jz err_sockfpm_conn ;; no socket reachable
+	socket phpfpmDomain, type, protocol
 	mov r15, rax ;; sockfd
-
-	connect r15, sockaddr, 110 ;; connect to socket fd phpfpm
+	connect r15, r10, 110
 	test rax, rax
 	jge fpm_connected
-	;; retry with the distro package socket name (php8.x-fpm)
 	mov rax, SYS_CLOSE
 	mov rdi, r15
 	syscall
-	socket phpfpmDomain, type, protocol
-	mov r15, rax
-	connect r15, sockaddr_alt, 110
-	test rax, rax
-	jl err_sockfpm_conn ;; check fpm permissions
+	add rbx, 8
+	jmp php_try_fpm
 fpm_connected:
 	
 	fcgiHeaders r15, fcgi_begin_headers, fcgi_begin_headers_length
@@ -670,7 +671,14 @@ loop_php_headers_next:
 loop_php_end:
 	add rsi, 4 ;; skip \r\n\r\n
 	mov r9, rsi ;; skip headers 
-	sub rbx, rcx ;; recalculate length ( content len - counter )	
+	sub rbx, rcx ;; recalculate length ( content len - counter )
+	cmp rbx, 4 ;; drop the 4 bytes of the header terminator itself
+	jbe php_zero_body
+	sub rbx, 4
+	jmp php_body_ok
+php_zero_body:
+	xor rbx, rbx
+php_body_ok:
 	
 	write r13, http_php_header, http_php_header_length ;; response headers
 	
@@ -895,6 +903,13 @@ sockaddr:
 sockaddr_alt:
 	db 1, 0 ;; af_unix = 1
 	db "/run/php/php8.4-fpm.sock", 0
+
+;; last-resort socket for php-fpm started by a normal user (no root / no systemd)
+sockaddr_tmp:
+	db 1, 0 ;; af_unix = 1
+	db "/tmp/php-fpm.sock", 0
+
+fpmSockets dq sockaddr, sockaddr_alt, sockaddr_tmp, 0
 
 fcgi_begin_headers:
 	db 1 ;; version = 1

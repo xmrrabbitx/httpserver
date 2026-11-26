@@ -1,0 +1,17 @@
+# httpserver configuration
+#
+# Read once at startup from the server's working directory.
+# All values are in bytes. A value of 0 disables that limit.
+#
+# Maximum response body produced by a PHP (FastCGI) script.
+# If exceeded, the server returns HTTP 503.
+# Hard cap: 2097152 bytes (2 MiB), regardless of this value.
+max_php_response_size=1048576
+
+# Maximum size of a static file served from the document root.
+# Larger files are truncated at this limit.
+max_static_file_size=8388608
+
+# Maximum output streamed by an executable or shared library (.so).
+# Output is truncated at this limit and the program is stopped.
+max_exec_output_size=1048576
